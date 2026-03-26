@@ -80,54 +80,6 @@ var _ = Describe("SNO End-to-end ProvisioningRequestReconcile with metal3 plugin
 				},
 			},
 		},
-		// HardwareTemplate Blue
-		&hwmgmtv1alpha1.HardwareTemplate{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      testutils.TestHwTemplateBlue,
-				Namespace: ctlrutils.InventoryNamespace,
-			},
-			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef:           testutils.TestHwPluginRef,
-				HardwareProvisioningTimeout: "10m",
-				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-					{
-						Name:           "single-node",
-						Role:           "master",
-						ResourcePoolId: testutils.TestPoolID,
-						HwProfile:      testutils.TestHwProfileName,
-						ResourceSelector: map[string]string{
-							"resourceselector.clcm.openshift.io/server-colour": "blue",
-							"resourceselector.clcm.openshift.io/server-type":   testutils.TestServerType,
-							"hardwaredata/cpu_arch":                            "x86_64",
-							"hardwaredata/storage;sizeBytes>500000000000":      "present",
-							"hardwaredata/ramMebibytes;gt":                     "65536",
-						},
-					},
-				},
-			},
-		},
-		// HardwareTemplate Green
-		&hwmgmtv1alpha1.HardwareTemplate{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      testutils.TestHwTemplateGreen,
-				Namespace: ctlrutils.InventoryNamespace,
-			},
-			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef:           testutils.TestHwPluginRef,
-				HardwareProvisioningTimeout: "10m",
-				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-					{
-						Name:           "single-node",
-						Role:           "master",
-						ResourcePoolId: testutils.TestPoolID,
-						HwProfile:      testutils.TestHwProfileName,
-						ResourceSelector: map[string]string{
-							"resourceselector.clcm.openshift.io/server-colour": "green",
-						},
-					},
-				},
-			},
-		},
 	}
 
 	// Create BareMetalHosts and associated resources in BeforeSuite
@@ -281,7 +233,21 @@ defaultHugepagesSize: "1G"`,
 			Templates: provisioningv1alpha1.Templates{
 				ClusterInstanceDefaults: ciDefaultsCmIncomplete,
 				PolicyTemplateDefaults:  ptDefaultsCm,
-				HwTemplate:              testutils.TestHwTemplateGreen,
+				HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
+					HardwarePluginRef:           testutils.TestHwPluginRef,
+					HardwareProvisioningTimeout: "10m",
+					NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+						{
+							Name:           "single-node",
+							Role:           "master",
+							ResourcePoolId: testutils.TestPoolID,
+							HwProfile:      testutils.TestHwProfileName,
+							ResourceSelector: map[string]string{
+								"resourceselector.clcm.openshift.io/server-colour": "green",
+							},
+						},
+					},
+				},
 			},
 			TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
 		},
@@ -299,7 +265,25 @@ defaultHugepagesSize: "1G"`,
 			Templates: provisioningv1alpha1.Templates{
 				ClusterInstanceDefaults: ciDefaultsCmComplete,
 				PolicyTemplateDefaults:  ptDefaultsCm,
-				HwTemplate:              testutils.TestHwTemplateBlue,
+				HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
+					HardwarePluginRef:           testutils.TestHwPluginRef,
+					HardwareProvisioningTimeout: "10m",
+					NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+						{
+							Name:           "single-node",
+							Role:           "master",
+							ResourcePoolId: testutils.TestPoolID,
+							HwProfile:      testutils.TestHwProfileName,
+							ResourceSelector: map[string]string{
+								"resourceselector.clcm.openshift.io/server-colour": "blue",
+								"resourceselector.clcm.openshift.io/server-type":   testutils.TestServerType,
+								"hardwaredata/cpu_arch":                            "x86_64",
+								"hardwaredata/storage;sizeBytes>500000000000":      "present",
+								"hardwaredata/ramMebibytes;gt":                     "65536",
+							},
+						},
+					},
+				},
 			},
 			TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
 		},
@@ -477,13 +461,6 @@ defaultHugepagesSize: "1G"`,
 				if err := K8SClient.Get(testCtx, client.ObjectKeyFromObject(ct), obj); err == nil {
 					_ = K8SClient.Delete(testCtx, obj)
 				}
-			}
-		}
-		for _, name := range []string{testutils.TestHwTemplateBlue, testutils.TestHwTemplateGreen} {
-			hwt := &hwmgmtv1alpha1.HardwareTemplate{}
-			if err := K8SClient.Get(testCtx, types.NamespacedName{
-				Name: name, Namespace: ctlrutils.InventoryNamespace}, hwt); err == nil {
-				_ = K8SClient.Delete(testCtx, hwt)
 			}
 		}
 		hwp := &hwmgmtv1alpha1.HardwareProfile{}

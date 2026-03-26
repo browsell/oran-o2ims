@@ -205,11 +205,22 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 		validationErrs = append(validationErrs, err.Error())
 	}
 
-	// Validate the timeout value from the hardware template if it's present
-	if t.object.Spec.Templates.HwTemplate != "" {
-		_, err = ctlrutils.GetTimeoutFromHWTemplate(ctx, t.client, t.object.Spec.Templates.HwTemplate)
-		if err != nil {
-			validationErrs = append(validationErrs, err.Error())
+	// Validate the hwMgmtDefaults inline data if present
+	if len(t.object.Spec.Templates.HwMgmtDefaults.NodeGroupData) > 0 {
+		seenNodeGroups := map[string]struct{}{}
+		for _, ng := range t.object.Spec.Templates.HwMgmtDefaults.NodeGroupData {
+			if _, exists := seenNodeGroups[ng.Name]; exists {
+				validationErrs = append(validationErrs,
+					fmt.Sprintf("duplicate nodeGroupData name %q in hwMgmtDefaults", ng.Name))
+			}
+			seenNodeGroups[ng.Name] = struct{}{}
+		}
+		if t.object.Spec.Templates.HwMgmtDefaults.HardwareProvisioningTimeout != "" {
+			if _, err := time.ParseDuration(t.object.Spec.Templates.HwMgmtDefaults.HardwareProvisioningTimeout); err != nil {
+				validationErrs = append(validationErrs,
+					fmt.Sprintf("hardwareProvisioningTimeout %q is not a valid duration: %v",
+						t.object.Spec.Templates.HwMgmtDefaults.HardwareProvisioningTimeout, err))
+			}
 		}
 	}
 
@@ -521,7 +532,7 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 		return ctlrutils.NewInputError("Error validating the policyTemplateParameters schema: %s", err.Error())
 	}
 	clusterInstanceParamsSchema := subSchemas[ctlrutils.TemplateParamClusterInstance].(map[string]any)
-	if err := validateClusterInstanceParamsSchema(object.Spec.Templates.HwTemplate, clusterInstanceParamsSchema); err != nil {
+	if err := validateClusterInstanceParamsSchema(len(object.Spec.Templates.HwMgmtDefaults.NodeGroupData) > 0, clusterInstanceParamsSchema); err != nil {
 		return ctlrutils.NewInputError("Error validating the clusterInstanceParameters schema: %s", err.Error())
 	}
 	return nil
@@ -576,20 +587,20 @@ func validatePolicyTemplateParamsSchema(schema map[string]any) error {
 }
 
 // validateClusterInstanceParamsSchema validates the cluster instance parameters schema.
-func validateClusterInstanceParamsSchema(hwTemplate string, schema map[string]any) error {
-	if hwTemplate == "" {
-		return validateSchemaWithoutHWTemplate(schema)
+func validateClusterInstanceParamsSchema(hasHwMgmt bool, schema map[string]any) error {
+	if !hasHwMgmt {
+		return validateSchemaWithoutHwMgmt(schema)
 	}
 	return nil
 }
 
-// validateSchemaWithoutHWTemplate checks if the schema contains the expected properties
-// when hardware template is not provided.
-func validateSchemaWithoutHWTemplate(schema map[string]any) error {
+// validateSchemaWithoutHwMgmt checks if the schema contains the expected properties
+// when hardware management defaults are not provided.
+func validateSchemaWithoutHwMgmt(schema map[string]any) error {
 	var expectedSubSchema map[string]any
 	err := yaml.Unmarshal([]byte(ctlrutils.ClusterInstanceParamsSubSchemaForNoHWTemplate), &expectedSubSchema)
 	if err != nil {
-		return fmt.Errorf("failed to parse expected clusterInstanceParams subschema for no hwTemplate: %w", err)
+		return fmt.Errorf("failed to parse expected clusterInstanceParams subschema for no hwMgmtDefaults: %w", err)
 	}
 
 	if err := checkSchemaContains(schema, expectedSubSchema, ctlrutils.TemplateParamClusterInstance); err != nil {

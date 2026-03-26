@@ -1064,11 +1064,11 @@ plan:
 				}
 				Expect(c.Status().Update(ctx, deletionCR)).To(Succeed())
 
-				// This will fail due to missing HardwareTemplate, which is expected behavior
+				// This will fail due to missing hwMgmtDefaults, which is expected behavior
 				// when the test setup doesn't include proper hardware plugin dependencies
 				_, err := deletionReconciler.handleProvisioningRequestDeletion(ctx, deletionCR)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("missing HardwareTemplate reference"))
+				Expect(err.Error()).To(ContainSubstring("missing hwMgmtDefaults"))
 			})
 		})
 
@@ -1619,7 +1619,12 @@ plan:
 					Templates: provisioningv1alpha1.Templates{
 						ClusterInstanceDefaults: "test-cluster-defaults",
 						PolicyTemplateDefaults:  "test-policy-defaults",
-						HwTemplate:              "test-hardware-template",
+						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
+							HardwareProvisioningTimeout: "90m",
+							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+								{Name: "controller", Role: "master", HwProfile: "profile-64G"},
+							},
+						},
 					},
 				},
 				Status: provisioningv1alpha1.ClusterTemplateStatus{
@@ -4699,7 +4704,12 @@ plan:
 					Templates: provisioningv1alpha1.Templates{
 						ClusterInstanceDefaults: "test-cluster-defaults",
 						PolicyTemplateDefaults:  "test-policy-defaults",
-						HwTemplate:              "test-hardware-template",
+						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
+							HardwareProvisioningTimeout: "90m",
+							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+								{Name: "controller", Role: "master", HwProfile: "profile-64G"},
+							},
+						},
 					},
 				},
 				Status: provisioningv1alpha1.ClusterTemplateStatus{
@@ -4748,7 +4758,12 @@ plan:
 				clusterInput: &clusterInput{},
 				ctDetails: &clusterTemplateDetails{
 					templates: provisioningv1alpha1.Templates{
-						HwTemplate: "test-hardware-template", // Ensure hardware provisioning is not skipped
+						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
+							HardwareProvisioningTimeout: "90m",
+							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+								{Name: "controller", Role: "master", HwProfile: "profile-64G"},
+							},
+						}, // Ensure hardware provisioning is not skipped
 					},
 				},
 				timeouts:       &timeouts{},
@@ -4854,7 +4869,7 @@ plan:
 		Context("when hardware provisioning is skipped", func() {
 			BeforeEach(func() {
 				// Ensure hardware template is empty to skip hardware provisioning
-				deployConfigTemplate.Spec.Templates.HwTemplate = ""
+				deployConfigTemplate.Spec.Templates.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{}
 				Expect(c.Update(ctx, deployConfigTemplate)).To(Succeed())
 			})
 
@@ -5266,7 +5281,12 @@ plan:
 					Templates: provisioningv1alpha1.Templates{
 						ClusterInstanceDefaults: "test-cluster-defaults",
 						PolicyTemplateDefaults:  "test-policy-defaults",
-						HwTemplate:              "test-hardware-template", // Hardware provisioning enabled
+						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
+							HardwareProvisioningTimeout: "90m",
+							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+								{Name: "controller", Role: "master", HwProfile: "profile-64G"},
+							},
+						}, // Hardware provisioning enabled
 					},
 				},
 				Status: provisioningv1alpha1.ClusterTemplateStatus{
@@ -5317,7 +5337,12 @@ plan:
 				clusterInput: &clusterInput{},
 				ctDetails: &clusterTemplateDetails{
 					templates: provisioningv1alpha1.Templates{
-						HwTemplate: "test-hardware-template", // Ensure hardware provisioning is not skipped
+						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
+							HardwareProvisioningTimeout: "90m",
+							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+								{Name: "controller", Role: "master", HwProfile: "profile-64G"},
+							},
+						}, // Ensure hardware provisioning is not skipped
 					},
 				},
 				timeouts:       &timeouts{},
@@ -5553,7 +5578,12 @@ plan:
 				object: testObject,
 				ctDetails: &clusterTemplateDetails{
 					templates: provisioningv1alpha1.Templates{
-						HwTemplate: "test-hw-template", // Non-empty to enable hardware provisioning
+						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
+							HardwareProvisioningTimeout: "30m",
+							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+								{Name: "master", Role: "master", HwProfile: "test-profile"},
+							},
+						}, // Enable hardware provisioning
 					},
 				},
 				timeouts: &timeouts{
@@ -5823,7 +5853,7 @@ plan:
 		Context("when hardware provisioning is skipped", func() {
 			BeforeEach(func() {
 				// Override isHardwareProvisionSkipped to return true
-				testTask.ctDetails.templates.HwTemplate = "" // Empty means skipped
+				testTask.ctDetails.templates.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{} // Empty means skipped
 				// Set an old UpdateTime that would trigger overall timeout but not hardware
 				testObject.Status.ProvisioningStatus.UpdateTime = metav1.Time{Time: currentTime.Add(-90 * time.Minute)}
 			})
@@ -5892,26 +5922,6 @@ plan:
 			ctx = context.Background()
 			currentTime = time.Now()
 
-			// Create HardwareTemplate with timeout configuration
-			hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-hw-template",
-					Namespace: utils.InventoryNamespace, // This is "oran-o2ims" namespace
-				},
-				Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-					HardwareProvisioningTimeout: "30m",
-					HardwarePluginRef:           "test-hw-plugin",
-					NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-						{
-							Name:           "master",
-							Role:           "master",
-							ResourcePoolId: "test-pool",
-							HwProfile:      "test-profile",
-						},
-					},
-				},
-			}
-
 			clusterInstanceConfigMap := &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-ci-defaults",
@@ -5950,7 +5960,12 @@ clustertemplate-test-policy-v1-cpu-reserved: "0-1"`,
 					Name:    "test-template",
 					Version: "v1.0.0",
 					Templates: provisioningv1alpha1.Templates{
-						HwTemplate:              "test-hw-template",
+						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
+							HardwareProvisioningTimeout: "30m",
+							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+								{Name: "master", Role: "master", ResourcePoolId: "test-pool", HwProfile: "test-profile"},
+							},
+						},
 						ClusterInstanceDefaults: "test-ci-defaults",
 						PolicyTemplateDefaults:  "test-pt-defaults",
 					},
@@ -5998,7 +6013,6 @@ clustertemplate-test-policy-v1-cpu-reserved: "0-1"`,
 			}
 
 			// Create all objects in the fake client
-			Expect(c.Create(ctx, hwTemplate)).To(Succeed())
 			Expect(c.Create(ctx, clusterInstanceConfigMap)).To(Succeed())
 			Expect(c.Create(ctx, policyTemplateConfigMap)).To(Succeed())
 			Expect(c.Create(ctx, testClusterTemplate)).To(Succeed())
@@ -6011,7 +6025,12 @@ clustertemplate-test-policy-v1-cpu-reserved: "0-1"`,
 				clusterInput: &clusterInput{},
 				ctDetails: &clusterTemplateDetails{
 					templates: provisioningv1alpha1.Templates{
-						HwTemplate: "test-hw-template", // Non-empty to enable hardware provisioning
+						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
+							HardwareProvisioningTimeout: "30m",
+							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+								{Name: "master", Role: "master", HwProfile: "test-profile"},
+							},
+						}, // Enable hardware provisioning
 					},
 				},
 				timeouts: &timeouts{
@@ -6119,4 +6138,185 @@ clustertemplate-test-policy-v1-cpu-reserved: "0-1"`,
 		})
 	})
 
+})
+
+var _ = Describe("validateAndMergeHwMgmtInput", func() {
+	var (
+		ctx         context.Context
+		c           client.Client
+		task        *provisioningRequestReconcilerTask
+		ct          *provisioningv1alpha1.ClusterTemplate
+		ctNamespace = "test-ns"
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		ct = &provisioningv1alpha1.ClusterTemplate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-ct.v1",
+				Namespace: ctNamespace,
+			},
+			Spec: provisioningv1alpha1.ClusterTemplateSpec{
+				Templates: provisioningv1alpha1.Templates{
+					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
+						HardwareProvisioningTimeout: "30m",
+						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+							{Name: "controller", Role: "master", HwProfile: "profile-64G", ResourcePoolId: "pool-1"},
+						},
+					},
+				},
+				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{
+					"type": "object",
+					"properties": {
+						"nodeClusterName": {"type": "string"},
+						"hwMgmtParameters": {"type": "object"}
+					}
+				}`)},
+			},
+		}
+	})
+
+	buildTask := func(c client.Client, templateParamsJSON string) *provisioningRequestReconcilerTask {
+		return &provisioningRequestReconcilerTask{
+			logger: slog.New(slog.NewTextHandler(os.Stderr, nil)),
+			client: c,
+			object: &provisioningv1alpha1.ProvisioningRequest{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-pr"},
+				Spec: provisioningv1alpha1.ProvisioningRequestSpec{
+					TemplateParameters: runtime.RawExtension{
+						Raw: []byte(templateParamsJSON),
+					},
+				},
+			},
+			clusterInput: &clusterInput{},
+			ctDetails: &clusterTemplateDetails{
+				namespace: ctNamespace,
+				templates: ct.Spec.Templates,
+			},
+			timeouts: &timeouts{
+				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
+			},
+		}
+	}
+
+	createHwProfiles := func() []client.Object {
+		return []client.Object{
+			&hwmgmtv1alpha1.HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: "profile-64G", Namespace: utils.InventoryNamespace},
+			},
+			&hwmgmtv1alpha1.HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: "profile-128G", Namespace: utils.InventoryNamespace},
+			},
+		}
+	}
+
+	It("should use defaults only when no hwMgmtParameters in PR", func() {
+		c = getFakeClientFromObjects(createHwProfiles()...)
+		task = buildTask(c, `{"nodeClusterName": "test"}`)
+
+		err := task.validateAndMergeHwMgmtInput(ctx, ct)
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(task.clusterInput.hwMgmtData).ToNot(BeNil())
+		ngData := task.clusterInput.hwMgmtData["nodeGroupData"].([]any)
+		Expect(ngData).To(HaveLen(1))
+		Expect(ngData[0].(map[string]any)["name"]).To(Equal("controller"))
+		Expect(ngData[0].(map[string]any)["hwProfile"]).To(Equal("profile-64G"))
+		Expect(task.timeouts.hardwareProvisioning).To(Equal(30 * time.Minute))
+	})
+
+	It("should merge hwMgmtParameters over defaults", func() {
+		c = getFakeClientFromObjects(createHwProfiles()...)
+		task = buildTask(c, `{
+			"nodeClusterName": "test",
+			"hwMgmtParameters": {
+				"hardwareProvisioningTimeout": "120m",
+				"nodeGroupData": [
+					{"name": "controller", "resourcePoolId": "pool-2"}
+				]
+			}
+		}`)
+
+		err := task.validateAndMergeHwMgmtInput(ctx, ct)
+		Expect(err).ToNot(HaveOccurred())
+
+		ngData := task.clusterInput.hwMgmtData["nodeGroupData"].([]any)
+		Expect(ngData).To(HaveLen(1))
+		controller := ngData[0].(map[string]any)
+		Expect(controller["role"]).To(Equal("master"))
+		Expect(controller["hwProfile"]).To(Equal("profile-64G"))
+		Expect(controller["resourcePoolId"]).To(Equal("pool-2"))
+		Expect(task.timeouts.hardwareProvisioning).To(Equal(120 * time.Minute))
+	})
+
+	It("should append new node groups from parameters", func() {
+		// Use a ClusterTemplate with only one node group in defaults
+		ct.Spec.Templates.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{
+			NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+				{Name: "controller", Role: "master", HwProfile: "profile-64G"},
+			},
+		}
+		c = getFakeClientFromObjects(createHwProfiles()...)
+		task = buildTask(c, `{
+			"nodeClusterName": "test",
+			"hwMgmtParameters": {
+				"nodeGroupData": [
+					{"name": "extra-worker", "role": "worker", "hwProfile": "profile-128G", "resourcePoolId": "pool-3"}
+				]
+			}
+		}`)
+
+		err := task.validateAndMergeHwMgmtInput(ctx, ct)
+		Expect(err).ToNot(HaveOccurred())
+
+		ngData := task.clusterInput.hwMgmtData["nodeGroupData"].([]any)
+		Expect(ngData).To(HaveLen(2))
+		Expect(ngData[0].(map[string]any)["name"]).To(Equal("controller"))
+		Expect(ngData[1].(map[string]any)["name"]).To(Equal("extra-worker"))
+		Expect(ngData[1].(map[string]any)["resourcePoolId"]).To(Equal("pool-3"))
+	})
+
+	It("should return error for invalid timeout in merged data", func() {
+		ct.Spec.Templates.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{
+			HardwareProvisioningTimeout: "60",
+			NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+				{Name: "controller", Role: "master"},
+			},
+		}
+		c = getFakeClientFromObjects()
+		task = buildTask(c, `{"nodeClusterName": "test"}`)
+
+		err := task.validateAndMergeHwMgmtInput(ctx, ct)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("not a valid duration"))
+	})
+
+	It("should override timeout from defaults with PR parameter", func() {
+		c = getFakeClientFromObjects(createHwProfiles()...)
+		task = buildTask(c, `{
+			"nodeClusterName": "test",
+			"hwMgmtParameters": {
+				"hardwareProvisioningTimeout": "90m"
+			}
+		}`)
+
+		err := task.validateAndMergeHwMgmtInput(ctx, ct)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(task.timeouts.hardwareProvisioning).To(Equal(90 * time.Minute))
+	})
+
+	It("should keep default timeout when no override provided", func() {
+		ct.Spec.Templates.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{
+			NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+				{Name: "controller", Role: "master"},
+			},
+		}
+		c = getFakeClientFromObjects(createHwProfiles()...)
+		task = buildTask(c, `{"nodeClusterName": "test"}`)
+
+		err := task.validateAndMergeHwMgmtInput(ctx, ct)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(task.timeouts.hardwareProvisioning).To(Equal(utils.DefaultHardwareProvisioningTimeout))
+	})
 })

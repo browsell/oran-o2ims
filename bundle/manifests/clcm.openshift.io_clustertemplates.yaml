@@ -94,10 +94,56 @@ spec:
                       ClusterInstanceDefaults defines a reference to a configmap with
                       default values for ClusterInstance
                     type: string
-                  hwTemplate:
-                    description: HwTemplate defines a reference to a HardwareTemplate
-                      resource
-                    type: string
+                  hwMgmtDefaults:
+                    description: |-
+                      HwMgmtDefaults defines the default hardware management parameters.
+                      When nodeGroupData is empty, hardware provisioning is skipped.
+                    properties:
+                      hardwarePluginRef:
+                        description: |-
+                          HardwarePluginRef is the name of the HardwarePlugin.
+                          When not specified, the internal metal3 hardware plugin is used.
+                        type: string
+                      hardwareProvisioningTimeout:
+                        description: HardwareProvisioningTimeout defines the timeout
+                          duration string for the hardware provisioning.
+                        type: string
+                      nodeGroupData:
+                        description: NodeGroupData defines a collection of node group
+                          configurations.
+                        items:
+                          description: NodeGroupData provides the necessary information
+                            for populating a node allocation request
+                          properties:
+                            hwProfile:
+                              description: HwProfile is the name of the HardwareProfile
+                                to use for this node group.
+                              type: string
+                            name:
+                              minLength: 1
+                              type: string
+                            resourcePoolId:
+                              description: ResourcePoolId is the identifier for the
+                                Resource Pool in the hardware manager instance.
+                              type: string
+                            resourceSelector:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            role:
+                              enum:
+                              - master
+                              - worker
+                              type: string
+                          required:
+                          - name
+                          - role
+                          type: object
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - name
+                        x-kubernetes-list-type: map
+                    type: object
                   policyTemplateDefaults:
                     description: |-
                       PolicyTemplateDefaults defines a reference to a configmap with

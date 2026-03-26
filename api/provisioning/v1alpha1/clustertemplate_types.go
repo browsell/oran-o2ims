@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package v1alpha1
 
 import (
+	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -52,10 +53,38 @@ type ClusterTemplateSpec struct {
 	TemplateParameterSchema runtime.RawExtension `json:"templateParameterSchema"`
 }
 
+// HwMgmtDefaults defines the default hardware management parameters.
+// When NodeGroupData is empty, hardware provisioning is skipped.
+type HwMgmtDefaults struct {
+	// HardwarePluginRef is the name of the HardwarePlugin.
+	// When not specified, the internal metal3 hardware plugin is used.
+	// +optional
+	HardwarePluginRef string `json:"hardwarePluginRef,omitempty"`
+	// HardwareProvisioningTimeout defines the timeout duration string for the hardware provisioning.
+	// +optional
+	HardwareProvisioningTimeout string `json:"hardwareProvisioningTimeout,omitempty"`
+	// NodeGroupData defines a collection of node group configurations.
+	// +optional
+	// +listType=map
+	// +listMapKey=name
+	NodeGroupData []hwmgmtv1alpha1.NodeGroupData `json:"nodeGroupData,omitempty"`
+}
+
+// GetHardwarePluginRef returns the HardwarePluginRef if set, or
+// DefaultHardwarePluginRef when the field is empty.
+func (d *HwMgmtDefaults) GetHardwarePluginRef() string {
+	if d.HardwarePluginRef == "" {
+		return hwmgmtv1alpha1.DefaultHardwarePluginRef
+	}
+	return d.HardwarePluginRef
+}
+
 // Templates defines the references to the templates required for ClusterTemplate.
 type Templates struct {
-	// HwTemplate defines a reference to a HardwareTemplate resource
-	HwTemplate string `json:"hwTemplate,omitempty"`
+	// HwMgmtDefaults defines the default hardware management parameters.
+	// When nodeGroupData is empty, hardware provisioning is skipped.
+	// +optional
+	HwMgmtDefaults HwMgmtDefaults `json:"hwMgmtDefaults,omitempty"`
 
 	// ClusterInstanceDefaults defines a reference to a configmap with
 	// default values for ClusterInstance

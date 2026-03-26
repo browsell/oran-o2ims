@@ -173,6 +173,7 @@ const (
 	TemplateParamOCloudSiteId    = "oCloudSiteId"
 	TemplateParamClusterInstance = "clusterInstanceParameters"
 	TemplateParamPolicyConfig    = "policyTemplateParameters"
+	TemplateParamHwMgmt          = "hwMgmtParameters"
 )
 
 // ClusterInstance template constants
@@ -224,12 +225,9 @@ const (
 	ClusterZtpNotDone = "ZTP Not Done"
 )
 
-// Hardeware template constants
+// Hardware management constants
 const (
-	HwTemplatePluginMgr             = "hardwarePluginRef"
-	HwTemplateNodeAllocationRequest = "node-group-data"
-	HwTemplateBootIfaceLabel        = "bootInterfaceLabel"
-	HwTemplateExtensions            = "extensions"
+	HwTemplateExtensions = "extensions"
 )
 
 const (

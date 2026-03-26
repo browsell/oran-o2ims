@@ -103,7 +103,6 @@ var _ = Describe("policyManagement", func() {
 		ctNamespace  = "clustertemplate-a-v4-16"
 		ciDefaultsCm = "clusterinstance-defaults-v1"
 		ptDefaultsCm = "policytemplate-defaults-v1"
-		hwTemplate   = "hwTemplate-v1"
 		clusterName  = "cluster-1"
 	)
 
@@ -175,7 +174,14 @@ var _ = Describe("policyManagement", func() {
 					Templates: provisioningv1alpha1.Templates{
 						ClusterInstanceDefaults: ciDefaultsCm,
 						PolicyTemplateDefaults:  ptDefaultsCm,
-						HwTemplate:              hwTemplate,
+						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
+							HardwarePluginRef:           utils.UnitTestHwPluginRef,
+							HardwareProvisioningTimeout: "1m",
+							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+								{Name: "controller", Role: "master", ResourcePoolId: "xyz", HwProfile: "profile-spr-single-processor-64G"},
+								{Name: "worker", Role: "worker", ResourcePoolId: "xyz", HwProfile: "profile-spr-dual-processor-128G"},
+							},
+						},
 					},
 					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
 				},
@@ -242,32 +248,7 @@ cpu-reserved: "0-1"
 defaultHugepagesSize: "1G"`,
 				},
 			},
-			// hardware template
-			&hwmgmtv1alpha1.HardwareTemplate{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      hwTemplate,
-					Namespace: utils.InventoryNamespace,
-				},
-				Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-					HardwarePluginRef:           utils.UnitTestHwPluginRef,
-					HardwareProvisioningTimeout: "1m",
-					NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-						{
-							Name:           "controller",
-							Role:           "master",
-							ResourcePoolId: "xyz",
-							HwProfile:      "profile-spr-single-processor-64G",
-						},
-						{
-							Name:           "worker",
-							Role:           "worker",
-							ResourcePoolId: "xyz",
-							HwProfile:      "profile-spr-dual-processor-128G",
-						},
-					},
-				},
-			},
-			// HardwareProfile CRs referenced by the HardwareTemplate.
+			// HardwareProfile CRs referenced by the hwMgmt defaults.
 			&hwmgmtv1alpha1.HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "profile-spr-single-processor-64G",
@@ -1797,7 +1778,6 @@ var _ = Describe("addPostProvisioningLabels", func() {
 		AgentName             = "agent-for-cluster-1"
 		ProvReqReconciler     *ProvisioningRequestReconciler
 		ProvReqTask           *provisioningRequestReconcilerTask
-		hwTemplate            = "hwTemplate-v1"
 		managedCluster        = &clusterv1.ManagedCluster{}
 		nodeAllocationRequest = &pluginsv1alpha1.NodeAllocationRequest{}
 		mockHwPluginServer    *MockHardwarePluginServer
@@ -1880,7 +1860,14 @@ var _ = Describe("addPostProvisioningLabels", func() {
 					Templates: provisioningv1alpha1.Templates{
 						ClusterInstanceDefaults: ciDefaultsCm,
 						PolicyTemplateDefaults:  ptDefaultsCm,
-						HwTemplate:              hwTemplate,
+						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
+							HardwarePluginRef:           utils.UnitTestHwPluginRef,
+							HardwareProvisioningTimeout: "1m",
+							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+								{Name: "controller", Role: "master", ResourcePoolId: "xyz", HwProfile: "profile-spr-single-processor-64G"},
+								{Name: "worker", Role: "worker", ResourcePoolId: "xyz", HwProfile: "profile-spr-dual-processor-128G"},
+							},
+						},
 					},
 					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
 				},
@@ -1981,6 +1968,19 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			client:         ProvReqReconciler.Client,
 			object:         provisioningRequest, // cluster-1 request
 			hwpluginClient: hwpluginClient,
+			ctDetails: &clusterTemplateDetails{
+				namespace: ctNamespace,
+				templates: provisioningv1alpha1.Templates{
+					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
+						HardwarePluginRef:           utils.UnitTestHwPluginRef,
+						HardwareProvisioningTimeout: "1m",
+						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+							{Name: "controller", Role: "master", ResourcePoolId: "xyz", HwProfile: "profile-spr-single-processor-64G"},
+							{Name: "worker", Role: "worker", ResourcePoolId: "xyz", HwProfile: "profile-spr-dual-processor-128G"},
+						},
+					},
+				},
+			},
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
 				clusterProvisioning:  utils.DefaultClusterInstallationTimeout,
@@ -2352,8 +2352,10 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			}, ct)).To(Succeed())
-			ct.Spec.Templates.HwTemplate = ""
+			ct.Spec.Templates.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{}
 			Expect(c.Update(ctx, ct)).To(Succeed())
+			// Also update the task's ctDetails to match.
+			ProvReqTask.ctDetails.templates.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{}
 		})
 
 		It("Does not add hardwarePluginRef and hwMgrNodeId labels to the Agents", func() {

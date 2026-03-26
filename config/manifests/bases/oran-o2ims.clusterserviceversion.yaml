@@ -251,42 +251,6 @@ spec:
       - displayName: Observed Generation
         path: observedGeneration
       version: v1alpha1
-    - description: HardwareTemplate is the Schema for the hardwaretemplates API
-      displayName: Hardware Template
-      kind: HardwareTemplate
-      name: hardwaretemplates.clcm.openshift.io
-      resources:
-      - kind: ConfigMap
-        name: ""
-        version: v1
-      specDescriptors:
-      - description: |-
-          BootInterfaceLabel is the label of the boot interface.
-          Deprecated: This field is deprecated and will be ignored. The boot interface label is now fixed as "boot-interface".
-        displayName: Boot Interface Label (Deprecated)
-        path: bootInterfaceLabel
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: |-
-          HardwarePluginRef is the name of the HardwarePlugin.
-          When not specified, the internal metal3 hardware plugin is used.
-        displayName: Hardware Plugin Reference
-        path: hardwarePluginRef
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: HardwareProvisioningTimeout defines the timeout duration string
-          for the hardware provisioning.
-        displayName: Hardware Provisioning Timeout
-        path: hardwareProvisioningTimeout
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: NodeGroupData defines a collection of NodeGroupData items
-        displayName: Node Group Data
-        path: nodeGroupData
-      statusDescriptors:
-      - displayName: Conditions
-        path: conditions
-      version: v1alpha1
     - description: Inventory is the Schema for the Inventory API
       displayName: O-Cloud Manager Inventory
       kind: Inventory
