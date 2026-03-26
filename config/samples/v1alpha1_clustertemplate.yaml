@@ -13,7 +13,7 @@ spec:
   metadata:
     apple: "23"
   templates:
-    hwTemplate: hwtemplate-sample
+    hwMgmtDefaults: clustertemplate-sample.v1.0.0-hwmgmt-defaults
     clusterInstanceDefaults: clustertemplate-sample.v1.0.0-clusterinstance-defaults
     policyTemplateDefaults: clustertemplate-sample.v1.0.0-policytemplate-defaults
     upgradeDefaults: upgrade-defaults-v1
@@ -23,24 +23,26 @@ spec:
         type: string
       oCloudSiteId:
         type: string
-      hwTemplateParameters:
+      hwMgmtParameters:
         description: >
-          hwTemplateParameters allows overriding hardware template settings
-          per nodeGroup, such as the HardwareProfile to use.
+          hwMgmtParameters allows overriding hardware management defaults
+          such as hardwareProvisioningTimeout and per-nodeGroup settings.
         properties:
+          hardwareProvisioningTimeout:
+            type: string
           nodeGroupData:
-            description: >
-              Per-nodeGroup overrides, keyed by nodeGroup name as defined in
-              the HardwareTemplate's nodeGroupData.
-            type: object
-            additionalProperties:
+            type: array
+            items:
               type: object
               properties:
-                hwProfile:
-                  description: >
-                    Name of the HardwareProfile CR to use for this node group.
-                    Overrides the hwProfile in the HardwareTemplate when both are set.
+                name:
                   type: string
+                resourcePoolId:
+                  type: string
+                resourceSelector:
+                  type: object
+                  additionalProperties:
+                    type: string
         type: object
       policyTemplateParameters:
         description: policyTemplateParameters defines the available parameters for cluster configuration

@@ -424,7 +424,7 @@ var _ = Describe("createOrUpdateClusterResources", func() {
 			},
 		}
 
-		task.ctDetails.templates.HwTemplate = "hwTemplate-v1"
+		task.ctDetails.templates.HwMgmtDefaults = "hwTemplate-v1"
 		err := task.createOrUpdateClusterResources(ctx, renderedClusterInstance)
 		Expect(err).To(HaveOccurred())
 

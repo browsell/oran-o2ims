@@ -175,7 +175,7 @@ var _ = Describe("policyManagement", func() {
 					Templates: provisioningv1alpha1.Templates{
 						ClusterInstanceDefaults: ciDefaultsCm,
 						PolicyTemplateDefaults:  ptDefaultsCm,
-						HwTemplate:              hwTemplate,
+						HwMgmtDefaults:          hwTemplate,
 					},
 					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
 				},
@@ -242,32 +242,28 @@ cpu-reserved: "0-1"
 defaultHugepagesSize: "1G"`,
 				},
 			},
-			// hardware template
-			&hwmgmtv1alpha1.HardwareTemplate{
+			// hwMgmt defaults ConfigMap
+			&corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      hwTemplate,
-					Namespace: utils.InventoryNamespace,
+					Namespace: ctNamespace,
 				},
-				Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-					HardwarePluginRef:           utils.UnitTestHwPluginRef,
-					HardwareProvisioningTimeout: "1m",
-					NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-						{
-							Name:           "controller",
-							Role:           "master",
-							ResourcePoolId: "xyz",
-							HwProfile:      "profile-spr-single-processor-64G",
-						},
-						{
-							Name:           "worker",
-							Role:           "worker",
-							ResourcePoolId: "xyz",
-							HwProfile:      "profile-spr-dual-processor-128G",
-						},
-					},
+				Data: map[string]string{
+					utils.HwMgmtDefaultsConfigmapKey: `
+hardwarePluginRef: ` + utils.UnitTestHwPluginRef + `
+hardwareProvisioningTimeout: "1m"
+nodeGroupData:
+  - name: controller
+    role: master
+    resourcePoolId: xyz
+    hwProfile: profile-spr-single-processor-64G
+  - name: worker
+    role: worker
+    resourcePoolId: xyz
+    hwProfile: profile-spr-dual-processor-128G`,
 				},
 			},
-			// HardwareProfile CRs referenced by the HardwareTemplate.
+			// HardwareProfile CRs referenced by the hwMgmt defaults.
 			&hwmgmtv1alpha1.HardwareProfile{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "profile-spr-single-processor-64G",
@@ -1880,7 +1876,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 					Templates: provisioningv1alpha1.Templates{
 						ClusterInstanceDefaults: ciDefaultsCm,
 						PolicyTemplateDefaults:  ptDefaultsCm,
-						HwTemplate:              hwTemplate,
+						HwMgmtDefaults:          hwTemplate,
 					},
 					TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
 				},
@@ -2358,7 +2354,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			}, ct)).To(Succeed())
-			ct.Spec.Templates.HwTemplate = ""
+			ct.Spec.Templates.HwMgmtDefaults = ""
 			Expect(c.Update(ctx, ct)).To(Succeed())
 		})
 

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"time"
 
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
@@ -44,6 +45,12 @@ func (t *provisioningRequestReconcilerTask) validateProvisioningRequestCR(ctx co
 		return fmt.Errorf("failed to validate PolicyTemplate input: %w", err)
 	}
 
+	if !t.isHardwareProvisionSkipped() {
+		if err = t.validateAndMergeHwMgmtInput(ctx, clusterTemplate); err != nil {
+			return fmt.Errorf("failed to validate hwMgmt input: %w", err)
+		}
+	}
+
 	// TODO: Verify that ClusterInstance is per ClusterRequest basis.
 	//       There should not be multiple ClusterRequests for the same ClusterInstance.
 	return nil
@@ -59,18 +66,7 @@ func (t *provisioningRequestReconcilerTask) validateAndLoadTimeouts(
 	t.timeouts.hardwareProvisioning = ctlrutils.DefaultHardwareProvisioningTimeout
 	t.timeouts.clusterConfiguration = ctlrutils.DefaultClusterConfigurationTimeout
 
-	// Load hardware provisioning timeout if exists.
-	if !t.isHardwareProvisionSkipped() {
-		hwCmName := clusterTemplate.Spec.Templates.HwTemplate
-		hwTimeout, err := ctlrutils.GetTimeoutFromHWTemplate(ctx, t.client, hwCmName)
-		if err != nil {
-			return fmt.Errorf("failed to get timeout from hardware template %s: %w", hwCmName, err)
-		}
-
-		if hwTimeout != 0 {
-			t.timeouts.hardwareProvisioning = hwTimeout
-		}
-	}
+	// Hardware provisioning timeout is loaded after hwMgmt merge in validateAndMergeHwMgmtInput
 
 	// Load cluster provisioning timeout if exists.
 	ciCmName := clusterTemplate.Spec.Templates.ClusterInstanceDefaults
@@ -174,6 +170,89 @@ func (t *provisioningRequestReconcilerTask) validatePolicyTemplateInputMatchesSc
 	}
 
 	t.clusterInput.policyTemplateData = mergedPolicyTemplateData
+	return nil
+}
+
+// validateAndMergeHwMgmtInput fetches the hwMgmtDefaults ConfigMap, extracts any
+// hwMgmtParameters from the ProvisioningRequest, performs a name-keyed merge of
+// nodeGroupData, and stores the merged result. It also loads the hardware provisioning
+// timeout from the merged data.
+func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
+	ctx context.Context, clusterTemplate *provisioningv1alpha1.ClusterTemplate) error {
+
+	hwMgmtCmName := clusterTemplate.Spec.Templates.HwMgmtDefaults
+
+	// Fetch defaults from the ConfigMap
+	hwMgmtCm, err := ctlrutils.GetConfigmap(ctx, t.client, hwMgmtCmName, t.ctDetails.namespace)
+	if err != nil {
+		return fmt.Errorf("failed to get ConfigMap %s: %w", hwMgmtCmName, err)
+	}
+	hwMgmtDefaults, err := ctlrutils.ExtractTemplateDataFromConfigMap[map[string]any](
+		hwMgmtCm, ctlrutils.HwMgmtDefaultsConfigmapKey)
+	if err != nil {
+		return fmt.Errorf("failed to get hwMgmt defaults from ConfigMap %s: %w", hwMgmtCmName, err)
+	}
+
+	// Start with defaults
+	mergedData := maps.Clone(hwMgmtDefaults)
+
+	// Extract hwMgmtParameters from ProvisioningRequest if present
+	hwMgmtParams, err := provisioningv1alpha1.ExtractMatchingInput(
+		t.object.Spec.TemplateParameters.Raw, ctlrutils.TemplateParamHwMgmt)
+	if err == nil && hwMgmtParams != nil {
+		hwMgmtParamsMap, ok := hwMgmtParams.(map[string]any)
+		if !ok {
+			return ctlrutils.NewInputError("templateParameters.%s must be an object", ctlrutils.TemplateParamHwMgmt)
+		}
+
+		// Handle nodeGroupData with name-keyed merge
+		srcNodeGroups, srcHasNG := hwMgmtParamsMap["nodeGroupData"]
+		dstNodeGroups, dstHasNG := mergedData["nodeGroupData"]
+		if srcHasNG && dstHasNG {
+			srcSlice, ok := srcNodeGroups.([]any)
+			if !ok {
+				return ctlrutils.NewInputError("templateParameters.%s.nodeGroupData must be an array", ctlrutils.TemplateParamHwMgmt)
+			}
+			dstSlice, ok := dstNodeGroups.([]any)
+			if !ok {
+				return fmt.Errorf("hwMgmtDefaults ConfigMap nodeGroupData must be an array")
+			}
+			mergedNG, err := ctlrutils.MergeNodeGroupData(dstSlice, srcSlice)
+			if err != nil {
+				return ctlrutils.NewInputError("failed to merge nodeGroupData: %s", err.Error())
+			}
+			mergedData["nodeGroupData"] = mergedNG
+			// Remove nodeGroupData from params so DeepMergeMaps doesn't overwrite
+			delete(hwMgmtParamsMap, "nodeGroupData")
+		} else if srcHasNG && !dstHasNG {
+			mergedData["nodeGroupData"] = srcNodeGroups
+			delete(hwMgmtParamsMap, "nodeGroupData")
+		}
+
+		// Merge remaining scalar fields (e.g., hardwareProvisioningTimeout)
+		if len(hwMgmtParamsMap) > 0 {
+			if err := ctlrutils.DeepMergeMaps(mergedData, hwMgmtParamsMap, false); err != nil {
+				return ctlrutils.NewInputError("failed to merge hwMgmt parameters: %s", err.Error())
+			}
+		}
+	}
+
+	t.clusterInput.hwMgmtData = mergedData
+
+	// Load hardware provisioning timeout from the merged data
+	if timeoutStr, ok := mergedData["hardwareProvisioningTimeout"].(string); ok && timeoutStr != "" {
+		timeout, err := time.ParseDuration(timeoutStr)
+		if err != nil {
+			return ctlrutils.NewInputError(
+				"hardwareProvisioningTimeout %q is not a valid duration: %s", timeoutStr, err.Error())
+		}
+		t.timeouts.hardwareProvisioning = timeout
+	}
+
+	t.logger.Info(
+		fmt.Sprintf("Merged hwMgmt default data with hwMgmtParameters for ProvisioningRequest"),
+		slog.String("name", t.object.Name),
+	)
 	return nil
 }
 

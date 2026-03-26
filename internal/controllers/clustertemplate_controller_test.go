@@ -63,7 +63,7 @@ The tests are organized into the following test suites:
    - Tests schema validation for cases without hardware template
    - Tests edge cases including whitespace handling and large/nested schemas
 
-10. validateSchemaWithoutHWTemplate Tests:
+10. validateSchemaWithoutHwMgmt Tests:
     - Tests detailed schema structure validation for cluster instances without hardware templates
     - Tests required node properties and BMC credential validation
     - Tests network interface configuration validation
@@ -93,7 +93,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
@@ -138,7 +137,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
-					HwTemplate:              hwTemplate,
+					HwMgmtDefaults:          hwTemplate,
 				},
 				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
 			},
@@ -181,30 +180,26 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		for _, cm := range cms {
 			Expect(c.Create(ctx, cm)).To(Succeed())
 		}
-		hwtmpl := &hwmgmtv1alpha1.HardwareTemplate{
+		hwMgmtCm := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      hwTemplate,
-				Namespace: ctlrutils.InventoryNamespace,
+				Namespace: ctNamespace,
 			},
-			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef: "hwMgr",
-				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-					{
-						Name:           "master",
-						Role:           "mmaster",
-						ResourcePoolId: "xyz",
-						HwProfile:      "profile-spr-single-processor-64G",
-					},
-					{
-						Name:           "worker",
-						Role:           "worker",
-						ResourcePoolId: "xyz",
-						HwProfile:      "profile-spr-single-processor-128G",
-					},
-				},
+			Data: map[string]string{
+				ctlrutils.HwMgmtDefaultsConfigmapKey: `
+hardwarePluginRef: hwMgr
+nodeGroupData:
+  - name: master
+    role: master
+    resourcePoolId: xyz
+    hwProfile: profile-spr-single-processor-64G
+  - name: worker
+    role: worker
+    resourcePoolId: xyz
+    hwProfile: profile-spr-single-processor-128G`,
 			},
 		}
-		Expect(c.Create(ctx, hwtmpl)).To(Succeed())
+		Expect(c.Create(ctx, hwMgmtCm)).To(Succeed())
 
 		// Create the ClusterImageSet required for validation
 		clusterImageSet := &hivev1.ClusterImageSet{
@@ -526,7 +521,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 		ciDefaultsCm = "clusterinstance-ci-defaults"
 		ptDefaultsCm = "policytemplate-ci-defaults"
 		hwTemplate   = "hwTemplate-v1"
-		hwtmpl       *hwmgmtv1alpha1.HardwareTemplate
+		hwMgmtCm     *corev1.ConfigMap
 		t            *clusterTemplateReconcilerTask
 	)
 
@@ -544,7 +539,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
-					HwTemplate:              hwTemplate,
+					HwMgmtDefaults:          hwTemplate,
 				},
 				TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
 			},
@@ -579,27 +574,23 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 			},
 		}
 
-		hwtmpl = &hwmgmtv1alpha1.HardwareTemplate{
+		hwMgmtCm = &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      hwTemplate,
-				Namespace: ctlrutils.InventoryNamespace,
+				Namespace: ctNamespace,
 			},
-			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef: "hwMgr",
-				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-					{
-						Name:           "master",
-						Role:           "master",
-						ResourcePoolId: "xyz",
-						HwProfile:      "profile-spr-single-processor-64G",
-					},
-					{
-						Name:           "worker",
-						Role:           "wprker",
-						ResourcePoolId: "xyz",
-						HwProfile:      "profile-spr-single-processor-128G",
-					},
-				},
+			Data: map[string]string{
+				ctlrutils.HwMgmtDefaultsConfigmapKey: `
+hardwarePluginRef: hwMgr
+nodeGroupData:
+  - name: master
+    role: master
+    resourcePoolId: xyz
+    hwProfile: profile-spr-single-processor-64G
+  - name: worker
+    role: worker
+    resourcePoolId: xyz
+    hwProfile: profile-spr-single-processor-128G`,
 			},
 		}
 
@@ -619,7 +610,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		for _, cm := range cms {
 			Expect(c.Create(ctx, cm)).To(Succeed())
 		}
-		Expect(c.Create(ctx, hwtmpl)).To(Succeed())
+		Expect(c.Create(ctx, hwMgmtCm)).To(Succeed())
 
 		// Create the ClusterImageSet required for validation
 		clusterImageSet := &hivev1.ClusterImageSet{
@@ -697,10 +688,22 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 			"the value of key %s from ConfigMap %s is not a valid duration string", ctlrutils.ClusterInstallationTimeoutConfigKey, ciDefaultsCm)))
 	})
 
-	It("should return validation error message if the hardware template has invalid timeout string", func() {
+	It("should return validation error when hwMgmt defaults ConfigMap is missing", func() {
+		for _, cm := range cms {
+			Expect(c.Create(ctx, cm)).To(Succeed())
+		}
+		// Do NOT create hwMgmtCm - it should be missing
 
-		hwtmpl.Spec.HardwareProvisioningTimeout = "60"
-		Expect(c.Create(ctx, hwtmpl)).To(Succeed())
+		clusterImageSet := &hivev1.ClusterImageSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "4.15.0",
+			},
+			Spec: hivev1.ClusterImageSetSpec{
+				ReleaseImage: "quay.io/openshift-release-dev/ocp-release:4.15.0-x86_64",
+			},
+		}
+		Expect(c.Create(ctx, clusterImageSet)).To(Succeed())
+
 		valid, err := t.validateClusterTemplateCR(ctx)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(valid).To(BeFalse())
@@ -708,19 +711,69 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 		// Check the status condition
 		conditions := t.object.Status.Conditions
 		Expect(conditions).To(HaveLen(1))
-		errMessage := fmt.Sprintf("the value of HardwareProvisioningTimeout from hardware template %s is not a valid duration string", hwtmpl.Name)
 		Expect(conditions[0].Type).To(Equal(string(provisioningv1alpha1.CTconditionTypes.Validated)))
 		Expect(conditions[0].Status).To(Equal(metav1.ConditionFalse))
 		Expect(conditions[0].Reason).To(Equal(string(provisioningv1alpha1.CTconditionReasons.Failed)))
-		Expect(conditions[0].Message).To(ContainSubstring(errMessage))
+		Expect(conditions[0].Message).To(ContainSubstring("is not found"))
+	})
 
-		// Check the HardwareTemplate status condition
-		VerifyHardwareTemplateStatus(ctx, c, hwtmpl.Name, metav1.Condition{
-			Type:    string(hwmgmtv1alpha1.Validation),
-			Status:  metav1.ConditionFalse,
-			Reason:  string(hwmgmtv1alpha1.Failed),
-			Message: errMessage,
-		})
+	Context("validateHwMgmtDefaults", func() {
+		DescribeTable("should validate hwMgmt defaults data",
+			func(data any, expectErr bool, errSubstring string) {
+				err := validateHwMgmtDefaults(data)
+				if expectErr {
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring(errSubstring))
+				} else {
+					Expect(err).ToNot(HaveOccurred())
+				}
+			},
+			Entry("valid with all fields", map[string]any{
+				"hardwareProvisioningTimeout": "90m",
+				"nodeGroupData": []any{
+					map[string]any{"name": "controller", "role": "master", "hwProfile": "profile-1"},
+					map[string]any{"name": "worker", "role": "worker"},
+				},
+			}, false, ""),
+			Entry("valid without timeout", map[string]any{
+				"nodeGroupData": []any{
+					map[string]any{"name": "controller", "role": "master"},
+				},
+			}, false, ""),
+			Entry("missing nodeGroupData", map[string]any{
+				"hardwareProvisioningTimeout": "90m",
+			}, true, "nodeGroupData is required"),
+			Entry("empty nodeGroupData", map[string]any{
+				"nodeGroupData": []any{},
+			}, true, "must contain at least one entry"),
+			Entry("missing name", map[string]any{
+				"nodeGroupData": []any{
+					map[string]any{"role": "master"},
+				},
+			}, true, "name is required"),
+			Entry("missing role", map[string]any{
+				"nodeGroupData": []any{
+					map[string]any{"name": "controller"},
+				},
+			}, true, "role is required"),
+			Entry("invalid role", map[string]any{
+				"nodeGroupData": []any{
+					map[string]any{"name": "controller", "role": "invalid"},
+				},
+			}, true, "must be 'master' or 'worker'"),
+			Entry("invalid timeout", map[string]any{
+				"hardwareProvisioningTimeout": "60",
+				"nodeGroupData": []any{
+					map[string]any{"name": "controller", "role": "master"},
+				},
+			}, true, "not a valid duration"),
+			Entry("non-string timeout", map[string]any{
+				"hardwareProvisioningTimeout": 60,
+				"nodeGroupData": []any{
+					map[string]any{"name": "controller", "role": "master"},
+				},
+			}, true, "must be a string"),
+		)
 	})
 
 	Context("skip clusterimageset validation annotation", func() {
@@ -1064,7 +1117,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
-					HwTemplate:              hwTemplate,
+					HwMgmtDefaults:          hwTemplate,
 				},
 			},
 		}
@@ -1087,7 +1140,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
-					HwTemplate:              hwTemplate,
+					HwMgmtDefaults:          hwTemplate,
 				},
 			},
 		}
@@ -1102,7 +1155,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
-					HwTemplate:              hwTemplate,
+					HwMgmtDefaults:          hwTemplate,
 				},
 			},
 		}
@@ -1133,7 +1186,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
-					HwTemplate:              hwTemplate,
+					HwMgmtDefaults:          hwTemplate,
 				},
 			},
 		}
@@ -1176,7 +1229,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
-					HwTemplate:              hwTemplate,
+					HwMgmtDefaults:          hwTemplate,
 				},
 			},
 		}
@@ -1202,7 +1255,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
-					HwTemplate:              hwTemplate,
+					HwMgmtDefaults:          hwTemplate,
 				},
 			},
 		}
@@ -1224,7 +1277,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
-					HwTemplate:              hwTemplate,
+					HwMgmtDefaults:          hwTemplate,
 				},
 			},
 		}
@@ -1258,7 +1311,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
 						Templates: provisioningv1alpha1.Templates{
-							HwTemplate: "hwTemplate-v1",
+							HwMgmtDefaults: "hwTemplate-v1",
 						},
 						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{
 		"properties": {
@@ -1290,7 +1343,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
 						Templates: provisioningv1alpha1.Templates{
-							HwTemplate: "hwTemplate-v1",
+							HwMgmtDefaults: "hwTemplate-v1",
 						},
 						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{
 		"properties": {
@@ -1322,7 +1375,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
 						Templates: provisioningv1alpha1.Templates{
-							HwTemplate: "hwTemplate-v1",
+							HwMgmtDefaults: "hwTemplate-v1",
 						},
 						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{
 		"properties": {
@@ -1354,7 +1407,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
 						Templates: provisioningv1alpha1.Templates{
-							HwTemplate: "hwTemplate-v1",
+							HwMgmtDefaults: "hwTemplate-v1",
 						},
 						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{
 		"properties": {
@@ -1385,7 +1438,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
 						Templates: provisioningv1alpha1.Templates{
-							HwTemplate: "hwTemplate-v1",
+							HwMgmtDefaults: "hwTemplate-v1",
 						},
 						TemplateParameterSchema: runtime.RawExtension{Raw: []byte(`{
 		"properties": {
@@ -1490,8 +1543,8 @@ var _ = Describe("validateClusterInstanceParamsSchema", func() {
 	})
 
 	Context("when hardware template is not provided", func() {
-		It("should delegate to validateSchemaWithoutHWTemplate for empty string", func() {
-			// This should call validateSchemaWithoutHWTemplate and succeed with valid schema
+		It("should delegate to validateSchemaWithoutHwMgmt for empty string", func() {
+			// This should call validateSchemaWithoutHwMgmt and succeed with valid schema
 			err := validateClusterInstanceParamsSchema("", validSchema)
 			Expect(err).ToNot(HaveOccurred())
 		})
@@ -1615,7 +1668,7 @@ var _ = Describe("validateClusterInstanceParamsSchema", func() {
 	})
 })
 
-var _ = Describe("validateSchemaWithoutHWTemplate", func() {
+var _ = Describe("validateSchemaWithoutHwMgmt", func() {
 
 	var baseSchema map[string]any
 
@@ -1628,7 +1681,7 @@ var _ = Describe("validateSchemaWithoutHWTemplate", func() {
 		// Remove the nodes property
 		delete(baseSchema["properties"].(map[string]any), "nodes")
 
-		err := validateSchemaWithoutHWTemplate(baseSchema)
+		err := validateSchemaWithoutHwMgmt(baseSchema)
 		Expect(err).To(HaveOccurred())
 		Expect(err).To(MatchError(
 			"unexpected clusterInstanceParameters structure: missing key \"nodes\" in field \"clusterInstanceParameters.properties\""))
@@ -1639,7 +1692,7 @@ var _ = Describe("validateSchemaWithoutHWTemplate", func() {
 		nodeProperties := baseSchema["properties"].(map[string]any)["nodes"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
 		delete(nodeProperties, "bmcCredentialsDetails")
 
-		err := validateSchemaWithoutHWTemplate(baseSchema)
+		err := validateSchemaWithoutHwMgmt(baseSchema)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(
 			"missing key \"bmcCredentialsDetails\" in field \"clusterInstanceParameters.properties.nodes.items.properties\""))
@@ -1654,7 +1707,7 @@ var _ = Describe("validateSchemaWithoutHWTemplate", func() {
 		bmcCredentialsDetailsProperties := bmcCredentialsDetails["properties"].(map[string]any)
 		delete(bmcCredentialsDetailsProperties, "username")
 
-		err := validateSchemaWithoutHWTemplate(baseSchema)
+		err := validateSchemaWithoutHwMgmt(baseSchema)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(
 			"missing key \"username\" in field \"clusterInstanceParameters.properties.nodes.items.properties.bmcCredentialsDetails.properties\""))
@@ -1668,7 +1721,7 @@ var _ = Describe("validateSchemaWithoutHWTemplate", func() {
 		bmcCredentialsDetails := properties["bmcCredentialsDetails"].(map[string]any)
 		bmcCredentialsDetails["required"] = "notAnArray"
 
-		err := validateSchemaWithoutHWTemplate(baseSchema)
+		err := validateSchemaWithoutHwMgmt(baseSchema)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(
 			"expected a list for key \"required\" in field \"clusterInstanceParameters.properties.nodes.items.properties.bmcCredentialsDetails\""))
@@ -1682,7 +1735,7 @@ var _ = Describe("validateSchemaWithoutHWTemplate", func() {
 		nodeNetworkProperties := properties["nodeNetwork"].(map[string]any)["properties"].(map[string]any)
 		nodeNetworkProperties["interfaces"] = "incorrectType"
 
-		err := validateSchemaWithoutHWTemplate(baseSchema)
+		err := validateSchemaWithoutHwMgmt(baseSchema)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(
 			"expected a map for key \"interfaces\" in field \"clusterInstanceParameters.properties.nodes.items.properties.nodeNetwork.properties\""))
@@ -1705,7 +1758,7 @@ var _ = Describe("validateSchemaWithoutHWTemplate", func() {
 			}
 		}
 
-		err := validateSchemaWithoutHWTemplate(baseSchema)
+		err := validateSchemaWithoutHwMgmt(baseSchema)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(
 			"list in field \"clusterInstanceParameters.properties.nodes.items.properties.nodeNetwork.properties.interfaces.items.required\" is missing element: macAddress"))
@@ -1716,7 +1769,7 @@ var _ = Describe("validateSchemaWithoutHWTemplate", func() {
 		err := yaml.Unmarshal([]byte(ctlrutils.ClusterInstanceParamsSubSchemaForNoHWTemplate), &baseSchema)
 		Expect(err).ToNot(HaveOccurred())
 
-		err = validateSchemaWithoutHWTemplate(baseSchema)
+		err = validateSchemaWithoutHwMgmt(baseSchema)
 		Expect(err).ToNot(HaveOccurred())
 	})
 })

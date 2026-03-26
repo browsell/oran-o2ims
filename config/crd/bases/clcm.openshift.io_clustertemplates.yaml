@@ -94,9 +94,11 @@ spec:
                       ClusterInstanceDefaults defines a reference to a configmap with
                       default values for ClusterInstance
                     type: string
-                  hwTemplate:
-                    description: HwTemplate defines a reference to a HardwareTemplate
-                      resource
+                  hwMgmtDefaults:
+                    description: |-
+                      HwMgmtDefaults defines a reference to a configmap with default values
+                      for hardware management parameters (nodeGroupData, hardwareProvisioningTimeout).
+                      When empty, hardware provisioning is skipped.
                     type: string
                   policyTemplateDefaults:
                     description: |-

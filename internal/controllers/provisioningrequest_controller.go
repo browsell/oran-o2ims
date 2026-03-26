@@ -56,6 +56,7 @@ type provisioningRequestReconcilerTask struct {
 type clusterInput struct {
 	clusterInstanceData map[string]any
 	policyTemplateData  map[string]any
+	hwMgmtData          map[string]any
 }
 
 // clusterTemplateDetails holds the details for the referenced ClusterTemplate
@@ -89,8 +90,6 @@ func GetClusterTemplateRefName(name, version string) string {
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=provisioningrequests/finalizers,verbs=update
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=siteconfig.open-cluster-management.io,resources=clusterinstances,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwaretemplates,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwaretemplates/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=nodeallocationrequests,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=nodeallocationrequests/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=nodes,verbs=get;list;watch;create;update;patch;delete
@@ -453,7 +452,7 @@ func (t *provisioningRequestReconcilerTask) checkOverallProvisioningTimeout(ctx 
 // initializeHardwarePluginIfNeeded initializes the hardware plugin client if hardware template is present
 func (t *provisioningRequestReconcilerTask) initializeHardwarePluginIfNeeded(ctx context.Context) error {
 	clusterTemplate, err := t.object.GetClusterTemplateRef(ctx, t.client)
-	if err == nil && clusterTemplate.Spec.Templates.HwTemplate != "" {
+	if err == nil && clusterTemplate.Spec.Templates.HwMgmtDefaults != "" {
 		if t.hwpluginClient == nil {
 			if err := t.initializeHardwarePluginClientWithRetry(ctx); err != nil {
 				return err
@@ -1305,7 +1304,7 @@ func (r *ProvisioningRequestReconciler) handleObservabilityAddonCleanup(ctx cont
 }
 
 func (t *provisioningRequestReconcilerTask) isHardwareProvisionSkipped() bool {
-	return t.ctDetails.templates.HwTemplate == ""
+	return t.ctDetails.templates.HwMgmtDefaults == ""
 }
 
 // finalizeProvisioningIfComplete checks if the provisioning/upgrade process is completed.

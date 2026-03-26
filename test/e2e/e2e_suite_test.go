@@ -255,54 +255,6 @@ var _ = BeforeSuite(func() {
 				},
 			},
 		},
-		// HardwareTemplate Blue
-		&hwmgmtv1alpha1.HardwareTemplate{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      testutils.TestHwTemplateBlue,
-				Namespace: ctlrutils.InventoryNamespace,
-			},
-			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef:           testutils.TestHwPluginRef,
-				HardwareProvisioningTimeout: "10m",
-				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-					{
-						Name:           "single-node",
-						Role:           "master",
-						ResourcePoolId: testutils.TestPoolID,
-						HwProfile:      testutils.TestHwProfileName,
-						ResourceSelector: map[string]string{
-							"resourceselector.clcm.openshift.io/server-colour": "blue",
-							"resourceselector.clcm.openshift.io/server-type":   testutils.TestServerType,
-							"hardwaredata/cpu_arch":                            "x86_64",
-							"hardwaredata/storage;sizeBytes>500000000000":      "present",
-							"hardwaredata/ramMebibytes;gt":                     "65536",
-						},
-					},
-				},
-			},
-		},
-		// HardwareTemplate Green
-		&hwmgmtv1alpha1.HardwareTemplate{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      testutils.TestHwTemplateGreen,
-				Namespace: ctlrutils.InventoryNamespace,
-			},
-			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef:           testutils.TestHwPluginRef,
-				HardwareProvisioningTimeout: "10m",
-				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-					{
-						Name:           "single-node",
-						Role:           "master",
-						ResourcePoolId: testutils.TestPoolID,
-						HwProfile:      testutils.TestHwProfileName,
-						ResourceSelector: map[string]string{
-							"resourceselector.clcm.openshift.io/server-colour": "green",
-						},
-					},
-				},
-			},
-		},
 	}
 
 	// Create BareMetalHosts and associated resources in BeforeSuite
@@ -469,6 +421,50 @@ var _ = Describe("End-to-end ProvisioningRequestReconcile with metal3 plugin", O
 				Name: "ztp-" + ctNamespace,
 			},
 		},
+		// HwMgmt Defaults Blue ConfigMap
+		&corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      testutils.TestHwMgmtDefaultsBlue,
+				Namespace: ctNamespace,
+			},
+			Data: map[string]string{
+				ctlrutils.HwMgmtDefaultsConfigmapKey: `
+hardwarePluginRef: ` + testutils.TestHwPluginRef + `
+hardwareProvisioningTimeout: "10m"
+nodeGroupData:
+  - name: single-node
+    role: master
+    resourcePoolId: ` + testutils.TestPoolID + `
+    hwProfile: ` + testutils.TestHwProfileName + `
+    resourceSelector:
+      resourceselector.clcm.openshift.io/server-colour: blue
+      resourceselector.clcm.openshift.io/server-type: ` + testutils.TestServerType + `
+      hardwaredata/cpu_arch: x86_64
+      "hardwaredata/storage;sizeBytes>500000000000": present
+      "hardwaredata/ramMebibytes;gt": "65536"
+`,
+			},
+		},
+		// HwMgmt Defaults Green ConfigMap
+		&corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      testutils.TestHwMgmtDefaultsGreen,
+				Namespace: ctNamespace,
+			},
+			Data: map[string]string{
+				ctlrutils.HwMgmtDefaultsConfigmapKey: `
+hardwarePluginRef: ` + testutils.TestHwPluginRef + `
+hardwareProvisioningTimeout: "10m"
+nodeGroupData:
+  - name: single-node
+    role: master
+    resourcePoolId: ` + testutils.TestPoolID + `
+    hwProfile: ` + testutils.TestHwProfileName + `
+    resourceSelector:
+      resourceselector.clcm.openshift.io/server-colour: green
+`,
+			},
+		},
 		// Configmap for ClusterInstance defaults v1 - missing required values.
 		&corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
@@ -590,7 +586,7 @@ defaultHugepagesSize: "1G"`,
 			Templates: provisioningv1alpha1.Templates{
 				ClusterInstanceDefaults: ciDefaultsCmIncomplete,
 				PolicyTemplateDefaults:  ptDefaultsCm,
-				HwTemplate:              testutils.TestHwTemplateGreen,
+				HwMgmtDefaults:          testutils.TestHwMgmtDefaultsGreen,
 			},
 			TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
 		},
@@ -608,7 +604,7 @@ defaultHugepagesSize: "1G"`,
 			Templates: provisioningv1alpha1.Templates{
 				ClusterInstanceDefaults: ciDefaultsCmComplete,
 				PolicyTemplateDefaults:  ptDefaultsCm,
-				HwTemplate:              testutils.TestHwTemplateBlue,
+				HwMgmtDefaults:          testutils.TestHwMgmtDefaultsBlue,
 			},
 			TemplateParameterSchema: runtime.RawExtension{Raw: []byte(testutils.TestFullTemplateSchema)},
 		},

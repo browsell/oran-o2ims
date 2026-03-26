@@ -19,7 +19,7 @@ Test Suites:
 
 1. handleRenderHardwareTemplate Tests:
    - Validates successful hardware template rendering and validation
-   - Tests error handling when HardwareTemplate is not found
+   - Tests error handling when hwMgmtData has no nodeGroupData
    - Tests error handling when ClusterTemplate is not found
 
 2. waitForNodeAllocationRequestProvision Tests:
@@ -64,14 +64,12 @@ Test Suites:
 
 Helper Functions:
    - createMockNodeAllocationRequestResponse: Creates mock responses for testing
-   - VerifyHardwareTemplateStatus: Validates hardware template status conditions
 */
 
 package controllers
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"time"
 
@@ -183,7 +181,7 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Templates: provisioningv1alpha1.Templates{
-					HwTemplate: hwTemplate,
+					HwMgmtDefaults: hwTemplate,
 				},
 			},
 		}
@@ -233,44 +231,21 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 		}
 		Expect(c.Status().Update(ctx, ct)).To(Succeed())
 
-		// Define the hardware template resource
-		hwTemplateResource := &hwmgmtv1alpha1.HardwareTemplate{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      hwTemplate,
-				Namespace: utils.InventoryNamespace,
-			},
-			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef: testMetal3HardwarePluginRef,
-				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-					{
-						Name:           "controller",
-						Role:           "master",
-						ResourcePoolId: "xyz",
-						HwProfile:      "profile-spr-single-processor-64G",
-					},
-					{
-						Name:           "worker",
-						Role:           "worker",
-						ResourcePoolId: "xyz",
-						HwProfile:      "profile-spr-dual-processor-128G",
-					},
+		// Set up the merged hwMgmt data on the task (handleRenderHardwareTemplate reads from t.clusterInput.hwMgmtData)
+		task.clusterInput = &clusterInput{
+			hwMgmtData: map[string]any{
+				"hardwarePluginRef": testMetal3HardwarePluginRef,
+				"nodeGroupData": []any{
+					map[string]any{"name": "controller", "role": "master", "hwProfile": "profile-spr-single-processor-64G", "resourcePoolId": "xyz"},
+					map[string]any{"name": "worker", "role": "worker", "hwProfile": "profile-spr-dual-processor-128G", "resourcePoolId": "xyz"},
 				},
 			},
 		}
 
-		// Create the hardware template that the ClusterTemplate references
-		Expect(c.Create(ctx, hwTemplateResource)).To(Succeed())
 		unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		nodeAllocationRequest, err := task.handleRenderHardwareTemplate(ctx, unstructuredCi)
 		Expect(err).ToNot(HaveOccurred())
-
-		VerifyHardwareTemplateStatus(ctx, c, hwTemplateResource.Name, metav1.Condition{
-			Type:    string(hwmgmtv1alpha1.Validation),
-			Status:  metav1.ConditionTrue,
-			Reason:  string(hwmgmtv1alpha1.Completed),
-			Message: "Validated",
-		})
 
 		Expect(nodeAllocationRequest).ToNot(BeNil())
 
@@ -294,35 +269,35 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 		}
 	})
 
-	It("returns an error when the HwTemplate is not found", func() {
-		// Create the ClusterTemplate but not the HardwareTemplate
-		Expect(c.Create(ctx, ct)).To(Succeed())
-
-		// Set the ClusterTemplate as validated
-		ct.Status.Conditions = []metav1.Condition{
-			{
-				Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
-				Status: metav1.ConditionTrue,
-				Reason: string(provisioningv1alpha1.CTconditionReasons.Completed),
+	It("returns an error when hwMgmtData has no nodeGroupData", func() {
+		// Set up clusterInput with hwMgmtData that has no nodeGroupData
+		task.clusterInput = &clusterInput{
+			hwMgmtData: map[string]any{
+				"hardwarePluginRef": testMetal3HardwarePluginRef,
 			},
 		}
-		Expect(c.Status().Update(ctx, ct)).To(Succeed())
 
 		unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
-		nodeAllocationRequest, err := task.handleRenderHardwareTemplate(ctx, unstructuredCi)
+		// Test buildNodeAllocationRequest directly since it validates nodeGroupData
+		nodeAllocationRequest, err := task.buildNodeAllocationRequest(unstructuredCi)
 		Expect(err).To(HaveOccurred())
 		Expect(nodeAllocationRequest).To(BeNil())
-		Expect(err.Error()).To(ContainSubstring("failed to get the HardwareTemplate"))
+		Expect(err.Error()).To(ContainSubstring("nodeGroupData not found"))
 	})
 
-	It("returns an error when the ClusterTemplate is not found", func() {
+	It("returns an error when hwMgmtData is nil and HardwarePlugin not found", func() {
+		// hwMgmtData is nil, defaulting to metal3 plugin which doesn't exist
+		task.clusterInput = &clusterInput{
+			hwMgmtData: map[string]any{},
+		}
+
 		unstructuredCi, err := utils.ConvertToUnstructured(*clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		nodeAllocationRequest, err := task.handleRenderHardwareTemplate(ctx, unstructuredCi)
 		Expect(err).To(HaveOccurred())
 		Expect(nodeAllocationRequest).To(BeNil())
-		Expect(err.Error()).To(ContainSubstring("failed to get the ClusterTemplate"))
+		Expect(err.Error()).To(ContainSubstring("could not find specified HardwarePlugin"))
 	})
 })
 
@@ -921,26 +896,16 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{
-			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-					{
-						Name:           "controller",
-						Role:           "master",
-						ResourcePoolId: "pool-1",
-						HwProfile:      "profile-1",
-					},
-					{
-						Name:           "worker",
-						Role:           "worker",
-						ResourcePoolId: "pool-2",
-						HwProfile:      "profile-2",
-					},
+		task.clusterInput = &clusterInput{
+			hwMgmtData: map[string]any{
+				"nodeGroupData": []any{
+					map[string]any{"name": "controller", "role": "master", "hwProfile": "profile-1", "resourcePoolId": "pool-1"},
+					map[string]any{"name": "worker", "role": "worker", "hwProfile": "profile-2", "resourcePoolId": "pool-2"},
 				},
 			},
 		}
 
-		nar, err := task.buildNodeAllocationRequest(clusterInstance, hwTemplate)
+		nar, err := task.buildNodeAllocationRequest(clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.Site).To(Equal("local-123"))
@@ -985,25 +950,17 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-hw-template",
-				Namespace: "default",
-			},
-			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef:           "test-plugin",
-				HardwareProvisioningTimeout: "60m",
-				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-					{
-						Name:      "controller",
-						Role:      "master",
-						HwProfile: "test-profile",
-					},
+		task.clusterInput = &clusterInput{
+			hwMgmtData: map[string]any{
+				"hardwarePluginRef":           "test-plugin",
+				"hardwareProvisioningTimeout": "60m",
+				"nodeGroupData": []any{
+					map[string]any{"name": "controller", "role": "master", "hwProfile": "test-profile"},
 				},
 			},
 		}
 
-		nar, err := task.buildNodeAllocationRequest(clusterInstance, hwTemplate)
+		nar, err := task.buildNodeAllocationRequest(clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.ConfigTransactionId).To(Equal(int64(1))) // Should match PR generation
@@ -1030,25 +987,17 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-hw-template",
-				Namespace: "default",
-			},
-			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef:           "test-plugin",
-				HardwareProvisioningTimeout: "", // Empty timeout
-				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-					{
-						Name:      "controller",
-						Role:      "master",
-						HwProfile: "test-profile",
-					},
+		task.clusterInput = &clusterInput{
+			hwMgmtData: map[string]any{
+				"hardwarePluginRef":           "test-plugin",
+				"hardwareProvisioningTimeout": "", // Empty timeout
+				"nodeGroupData": []any{
+					map[string]any{"name": "controller", "role": "master", "hwProfile": "test-profile"},
 				},
 			},
 		}
 
-		nar, err := task.buildNodeAllocationRequest(clusterInstance, hwTemplate)
+		nar, err := task.buildNodeAllocationRequest(clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.HardwareProvisioningTimeout).ToNot(BeNil())
@@ -1063,15 +1012,17 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{}
+		task.clusterInput = &clusterInput{
+			hwMgmtData: map[string]any{},
+		}
 
-		nar, err := task.buildNodeAllocationRequest(clusterInstance, hwTemplate)
+		nar, err := task.buildNodeAllocationRequest(clusterInstance)
 		Expect(err).To(HaveOccurred())
 		Expect(nar).To(BeNil())
 		Expect(err.Error()).To(ContainSubstring("spec.nodes not found in cluster instance"))
 	})
 
-	It("uses hwProfile from templateParameters when provided", func() {
+	It("uses overridden hwProfile from merged hwMgmtData", func() {
 		clusterInstance := &unstructured.Unstructured{}
 		clusterInstance.Object = map[string]interface{}{
 			"spec": map[string]interface{}{
@@ -1086,50 +1037,17 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{
-			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-					{
-						Name:           "controller",
-						Role:           "master",
-						ResourcePoolId: "pool-1",
-						HwProfile:      "template-profile-1",
-					},
-					{
-						Name:           "worker",
-						Role:           "worker",
-						ResourcePoolId: "pool-2",
-						HwProfile:      "template-profile-2",
-					},
+		// The hwMgmtData is already merged with overrides before buildNodeAllocationRequest is called
+		task.clusterInput = &clusterInput{
+			hwMgmtData: map[string]any{
+				"nodeGroupData": []any{
+					map[string]any{"name": "controller", "role": "master", "hwProfile": "override-profile-1", "resourcePoolId": "pool-1"},
+					map[string]any{"name": "worker", "role": "worker", "hwProfile": "template-profile-2", "resourcePoolId": "pool-2"},
 				},
 			},
 		}
 
-		// Override hwProfile via templateParameters for the controller group
-		task.object.Spec.TemplateParameters = runtime.RawExtension{
-			Raw: []byte(fmt.Sprintf(`{
-				"%s": "exampleCluster",
-				"%s": "local-123",
-				"%s": %s,
-				"%s": %s,
-				"%s": {
-					"%s": {
-						"controller": {
-							"hwProfile": "override-profile-1"
-						}
-					}
-				}
-			}`, utils.TemplateParamNodeClusterName,
-				utils.TemplateParamOCloudSiteId,
-				utils.TemplateParamClusterInstance,
-				testutils.TestClusterInstanceInput,
-				utils.TemplateParamPolicyConfig,
-				testutils.TestPolicyTemplateInput,
-				provisioningv1alpha1.TemplateParamHwTemplate,
-				provisioningv1alpha1.TemplateParamNodeGroupData)),
-		}
-
-		nar, err := task.buildNodeAllocationRequest(clusterInstance, hwTemplate)
+		nar, err := task.buildNodeAllocationRequest(clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.NodeGroup).To(HaveLen(2))
@@ -1152,7 +1070,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		Expect(workerGroup.NodeGroupData.HwProfile).To(Equal("template-profile-2"))
 	})
 
-	It("falls back to HardwareTemplate hwProfile when not in templateParameters", func() {
+	It("uses hwProfile from hwMgmtData defaults", func() {
 		clusterInstance := &unstructured.Unstructured{}
 		clusterInstance.Object = map[string]interface{}{
 			"spec": map[string]interface{}{
@@ -1164,28 +1082,22 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{
-			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-					{
-						Name:           "controller",
-						Role:           "master",
-						ResourcePoolId: "pool-1",
-						HwProfile:      "template-profile-1",
-					},
+		task.clusterInput = &clusterInput{
+			hwMgmtData: map[string]any{
+				"nodeGroupData": []any{
+					map[string]any{"name": "controller", "role": "master", "hwProfile": "template-profile-1", "resourcePoolId": "pool-1"},
 				},
 			},
 		}
 
-		// No hwTemplateParameters override - should use HardwareTemplate value
-		nar, err := task.buildNodeAllocationRequest(clusterInstance, hwTemplate)
+		nar, err := task.buildNodeAllocationRequest(clusterInstance)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(nar).ToNot(BeNil())
 		Expect(nar.NodeGroup).To(HaveLen(1))
 		Expect(nar.NodeGroup[0].NodeGroupData.HwProfile).To(Equal("template-profile-1"))
 	})
 
-	It("returns error when neither source provides hwProfile", func() {
+	It("returns error when no hwProfile is provided", func() {
 		clusterInstance := &unstructured.Unstructured{}
 		clusterInstance.Object = map[string]interface{}{
 			"spec": map[string]interface{}{
@@ -1197,24 +1109,19 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			},
 		}
 
-		hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{
-			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-					{
-						Name:           "controller",
-						Role:           "master",
-						ResourcePoolId: "pool-1",
-						// No HwProfile set
-					},
+		task.clusterInput = &clusterInput{
+			hwMgmtData: map[string]any{
+				"nodeGroupData": []any{
+					map[string]any{"name": "controller", "role": "master", "resourcePoolId": "pool-1"},
+					// No hwProfile set
 				},
 			},
 		}
 
-		// No hwTemplateParameters override either
-		nar, err := task.buildNodeAllocationRequest(clusterInstance, hwTemplate)
+		nar, err := task.buildNodeAllocationRequest(clusterInstance)
 		Expect(err).To(HaveOccurred())
 		Expect(nar).To(BeNil())
-		Expect(err.Error()).To(ContainSubstring("no hwProfile specified for nodeGroup controller"))
+		Expect(err.Error()).To(ContainSubstring("no hwProfile specified for nodeGroup"))
 	})
 })
 
@@ -1350,7 +1257,7 @@ var _ = Describe("waitForHardwareData", func() {
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Templates: provisioningv1alpha1.Templates{
-					HwTemplate: "test-hardware-template",
+					HwMgmtDefaults: "test-hardware-template",
 				},
 			},
 			Status: provisioningv1alpha1.ClusterTemplateStatus{
@@ -1364,32 +1271,7 @@ var _ = Describe("waitForHardwareData", func() {
 			},
 		}
 
-		// Create a HardwareTemplate for the tests
-		hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-hardware-template",
-				Namespace: utils.InventoryNamespace,
-			},
-			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef: testMetal3HardwarePluginRef,
-				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-					{
-						Name:           "controller",
-						Role:           "master",
-						ResourcePoolId: "xyz",
-						HwProfile:      "profile-spr-single-processor-64G",
-					},
-					{
-						Name:           "worker",
-						Role:           "worker",
-						ResourcePoolId: "xyz",
-						HwProfile:      "profile-spr-dual-processor-128G",
-					},
-				},
-			},
-		}
-
-		c = getFakeClientFromObjects([]client.Object{cr, ct, hwTemplate}...)
+		c = getFakeClientFromObjects([]client.Object{cr, ct}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
 			Logger: logger,
@@ -1569,36 +1451,26 @@ var _ = Describe("checkExistingNodeAllocationRequest", func() {
 	It("returns error when hwpluginClient is nil", func() {
 		task.hwpluginClient = nil
 
-		hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{}
+		hwMgmtData := map[string]any{}
 		nodeAllocationRequestId := "test-id"
 
-		response, err := task.checkExistingNodeAllocationRequest(ctx, hwTemplate, nodeAllocationRequestId)
+		response, err := task.checkExistingNodeAllocationRequest(ctx, hwMgmtData, nodeAllocationRequestId)
 		Expect(err).To(HaveOccurred())
 		Expect(response).To(BeNil())
 		Expect(err.Error()).To(ContainSubstring("hwpluginClient is nil"))
 	})
 
 	It("returns response when NodeAllocationRequest exists and matches", func() {
-		hwTemplate := &hwmgmtv1alpha1.HardwareTemplate{
-			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef: testMetal3HardwarePluginRef,
-				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-					{
-						Name:      "controller",
-						Role:      "master",
-						HwProfile: "profile-spr-single-processor-64G",
-					},
-					{
-						Name:      "worker",
-						Role:      "worker",
-						HwProfile: "profile-spr-dual-processor-128G",
-					},
-				},
+		hwMgmtData := map[string]any{
+			"hardwarePluginRef": testMetal3HardwarePluginRef,
+			"nodeGroupData": []any{
+				map[string]any{"name": "controller", "role": "master", "hwProfile": "profile-spr-single-processor-64G"},
+				map[string]any{"name": "worker", "role": "worker", "hwProfile": "profile-spr-dual-processor-128G"},
 			},
 		}
 		nodeAllocationRequestId := crName
 
-		response, err := task.checkExistingNodeAllocationRequest(ctx, hwTemplate, nodeAllocationRequestId)
+		response, err := task.checkExistingNodeAllocationRequest(ctx, hwMgmtData, nodeAllocationRequestId)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(response).ToNot(BeNil())
 	})
@@ -1688,7 +1560,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Templates: provisioningv1alpha1.Templates{
-					HwTemplate: hwTemplate,
+					HwMgmtDefaults: hwTemplate,
 				},
 			},
 			Status: provisioningv1alpha1.ClusterTemplateStatus{
@@ -1697,31 +1569,6 @@ var _ = Describe("applyNodeConfiguration", func() {
 						Type:   string(provisioningv1alpha1.CTconditionTypes.Validated),
 						Status: metav1.ConditionTrue,
 						Reason: string(provisioningv1alpha1.CTconditionReasons.Completed),
-					},
-				},
-			},
-		}
-
-		// Create hardware template
-		hwTemplateResource := &hwmgmtv1alpha1.HardwareTemplate{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      hwTemplate,
-				Namespace: utils.InventoryNamespace,
-			},
-			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef: testMetal3HardwarePluginRef,
-				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-					{
-						Name:           "controller",
-						Role:           "master",
-						ResourcePoolId: "xyz",
-						HwProfile:      "profile-spr-single-processor-64G",
-					},
-					{
-						Name:           "worker",
-						Role:           "worker",
-						ResourcePoolId: "xyz",
-						HwProfile:      "profile-spr-dual-processor-128G",
 					},
 				},
 			},
@@ -1788,7 +1635,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 			},
 		}
 
-		c = getFakeClientFromObjects([]client.Object{cr, ct, hwTemplateResource}...)
+		c = getFakeClientFromObjects([]client.Object{cr, ct}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
 			Logger: logger,
@@ -1799,7 +1646,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 			object: cr,
 			ctDetails: &clusterTemplateDetails{
 				templates: provisioningv1alpha1.Templates{
-					HwTemplate: hwTemplate,
+					HwMgmtDefaults: hwTemplate,
 				},
 				namespace: ctNamespace,
 			},
@@ -1922,7 +1769,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 
 	It("returns error when hardware provisioning is skipped", func() {
 		// Set hardware template to empty to skip hardware provisioning
-		task.ctDetails.templates.HwTemplate = ""
+		task.ctDetails.templates.HwMgmtDefaults = ""
 
 		err := task.applyNodeConfiguration(ctx, hwNodes, nar, ci)
 		Expect(err).To(HaveOccurred())
@@ -2065,65 +1912,24 @@ var _ = Describe("applyNodeConfiguration", func() {
 	})
 })
 
-func VerifyHardwareTemplateStatus(ctx context.Context, c client.Client, templateName string, expectedCon metav1.Condition) {
-	updatedHwTempl := &hwmgmtv1alpha1.HardwareTemplate{}
-	Expect(c.Get(ctx, client.ObjectKey{Name: templateName, Namespace: utils.InventoryNamespace}, updatedHwTempl)).To(Succeed())
-	hwTemplCond := meta.FindStatusCondition(updatedHwTempl.Status.Conditions, expectedCon.Type)
-	Expect(hwTemplCond).ToNot(BeNil())
-	testutils.VerifyStatusCondition(*hwTemplCond, metav1.Condition{
-		Type:    expectedCon.Type,
-		Status:  expectedCon.Status,
-		Reason:  expectedCon.Reason,
-		Message: expectedCon.Message,
-	})
-}
-
 var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", func() {
 	var (
-		c                client.Client
-		ctx              context.Context
-		logger           *slog.Logger
-		reconciler       *ProvisioningRequestReconciler
-		task             *provisioningRequestReconcilerTask
-		cr               *provisioningv1alpha1.ProvisioningRequest
-		template         *provisioningv1alpha1.ClusterTemplate
-		hardwareTemplate *hwmgmtv1alpha1.HardwareTemplate
-		testClusterName  = "test-update-after-failure-cluster"
-		testNARID        = "test-nar-failed-update"
+		c               client.Client
+		ctx             context.Context
+		logger          *slog.Logger
+		reconciler      *ProvisioningRequestReconciler
+		task            *provisioningRequestReconcilerTask
+		cr              *provisioningv1alpha1.ProvisioningRequest
+		template        *provisioningv1alpha1.ClusterTemplate
+		testClusterName = "test-update-after-failure-cluster"
+		testNARID       = "test-nar-failed-update"
 	)
 
 	BeforeEach(func() {
 		ctx = context.Background()
 		logger = slog.New(slog.DiscardHandler)
 
-		// Create a HardwareTemplate for the test
-		hardwareTemplate = &hwmgmtv1alpha1.HardwareTemplate{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-hw-template-update-after-failure",
-				Namespace: "test-ns",
-			},
-			Spec: hwmgmtv1alpha1.HardwareTemplateSpec{
-				HardwarePluginRef: "test-plugin",
-				NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-					{
-						Name:      "master",
-						Role:      "master",
-						HwProfile: "test-profile",
-					},
-				},
-			},
-			Status: hwmgmtv1alpha1.HardwareTemplateStatus{
-				Conditions: []metav1.Condition{
-					{
-						Type:   string(hwmgmtv1alpha1.Validation),
-						Status: metav1.ConditionTrue,
-						Reason: string(hwmgmtv1alpha1.Completed),
-					},
-				},
-			},
-		}
-
-		// Create a ClusterTemplate with hardware template
+		// Create a ClusterTemplate
 		template = &provisioningv1alpha1.ClusterTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-template-update-after-failure.v1.0.0",
@@ -2133,7 +1939,7 @@ var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", fun
 				Release: "4.17.0",
 				Templates: provisioningv1alpha1.Templates{
 					ClusterInstanceDefaults: "test-cluster-defaults",
-					HwTemplate:              "test-hw-template-update-after-failure",
+					HwMgmtDefaults:          "test-hw-template-update-after-failure",
 				},
 			},
 			Status: provisioningv1alpha1.ClusterTemplateStatus{
@@ -2186,7 +1992,7 @@ var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", fun
 			},
 		}
 
-		c = getFakeClientFromObjects([]client.Object{cr, template, hardwareTemplate}...)
+		c = getFakeClientFromObjects([]client.Object{cr, template}...)
 		reconciler = &ProvisioningRequestReconciler{
 			Client: c,
 			Logger: logger,
