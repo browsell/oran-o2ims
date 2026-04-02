@@ -18,6 +18,7 @@ import (
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	"github.com/r3labs/diff/v3"
 	"github.com/xeipuuv/gojsonschema"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -425,7 +426,8 @@ func SchemaDefinesHwMgmtParameters(clusterTemplate *ClusterTemplate) bool {
 func (r *ProvisioningRequest) ValidateHwMgmtHwProfiles(
 	ctx context.Context, c client.Client, clusterTemplate *ClusterTemplate) error {
 
-	if len(clusterTemplate.Spec.Templates.HwMgmtDefaults.NodeGroupData) == 0 {
+	if len(clusterTemplate.Spec.TemplateDefaults.HwMgmtDefaults.NodeGroupData) == 0 &&
+		!SchemaDefinesHwMgmtParameters(clusterTemplate) {
 		return nil
 	}
 
@@ -470,7 +472,10 @@ func (r *ProvisioningRequest) ValidateHwMgmtHwProfiles(
 
 		hwProfileObj := &hwmgmtv1alpha1.HardwareProfile{}
 		if err := c.Get(ctx, client.ObjectKey{Name: hwProfile, Namespace: hwmgmtNS}, hwProfileObj); err != nil {
-			return fmt.Errorf("hardwareProfile %q referenced by nodeGroup %q does not exist", hwProfile, name)
+			if k8serrors.IsNotFound(err) {
+				return fmt.Errorf("hardwareProfile %q referenced by nodeGroup %q does not exist", hwProfile, name)
+			}
+			return fmt.Errorf("failed to get HardwareProfile %q for nodeGroup %q: %w", hwProfile, name, err)
 		}
 	}
 

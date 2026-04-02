@@ -62,7 +62,7 @@ type clusterInput struct {
 // clusterTemplateDetails holds the details for the referenced ClusterTemplate
 type clusterTemplateDetails struct {
 	namespace string
-	templates provisioningv1alpha1.Templates
+	templates provisioningv1alpha1.TemplateDefaults
 }
 
 // timeouts holds the timeout values, in minutes,
@@ -89,6 +89,7 @@ func GetClusterTemplateRefName(name, version string) string {
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=provisioningrequests/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=provisioningrequests/finalizers,verbs=update
 //+kubebuilder:rbac:groups=clcm.openshift.io,resources=clustertemplates,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=clcm.openshift.io,resources=hardwareprofiles,verbs=get;list;watch
 //+kubebuilder:rbac:groups=siteconfig.open-cluster-management.io,resources=clusterinstances,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=nodeallocationrequests,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=plugins.clcm.openshift.io,resources=nodeallocationrequests/status,verbs=get;update;patch
@@ -455,7 +456,7 @@ func (t *provisioningRequestReconcilerTask) initializeHardwarePluginIfNeeded(ctx
 
 	// Check if hardware provisioning might be needed: either the CT has default
 	// nodeGroupData, or the PR supplies hwMgmtParameters with nodeGroupData.
-	needsHwPlugin := len(clusterTemplate.Spec.Templates.HwMgmtDefaults.NodeGroupData) > 0
+	needsHwPlugin := len(clusterTemplate.Spec.TemplateDefaults.HwMgmtDefaults.NodeGroupData) > 0
 	if !needsHwPlugin {
 		hwMgmtParams, extractErr := provisioningv1alpha1.ExtractMatchingInput(
 			t.object.Spec.TemplateParameters.Raw, ctlrutils.TemplateParamHwMgmt)

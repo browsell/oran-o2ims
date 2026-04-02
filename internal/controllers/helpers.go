@@ -73,9 +73,19 @@ func validateNodeGroupsMatchNAR(hwMgmtData map[string]any, nodeAllocationRequest
 		}
 	}
 
+	// Check NAR groups exist in hwMgmt data
+	narNames := make(map[string]bool)
 	for _, specNodeGroup := range nodeAllocationRequest.NodeGroup {
+		narNames[specNodeGroup.NodeGroupData.Name] = true
 		if !validNames[specNodeGroup.NodeGroupData.Name] {
 			return fmt.Errorf("node group %s found in NodeAllocationRequest but not in hwMgmt data", specNodeGroup.NodeGroupData.Name)
+		}
+	}
+
+	// Check hwMgmt data groups exist in NAR
+	for name := range validNames {
+		if !narNames[name] {
+			return fmt.Errorf("node group %s found in hwMgmt data but not in NodeAllocationRequest", name)
 		}
 	}
 

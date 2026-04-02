@@ -230,7 +230,7 @@ defaultHugepagesSize: "1G"`,
 			Version:    tVersion1,
 			Release:    "4.15.0",
 			TemplateID: "aab39bda-ac56-4143-9b10-d1a71517d04f",
-			Templates: provisioningv1alpha1.Templates{
+			TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 				ClusterInstanceDefaults: ciDefaultsCmIncomplete,
 				PolicyTemplateDefaults:  ptDefaultsCm,
 				HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
@@ -262,7 +262,7 @@ defaultHugepagesSize: "1G"`,
 			Version:    tVersion2,
 			Release:    "4.15.0",
 			TemplateID: "bbb39bda-ac56-4143-9b10-d1a71517d04f",
-			Templates: provisioningv1alpha1.Templates{
+			TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 				ClusterInstanceDefaults: ciDefaultsCmComplete,
 				PolicyTemplateDefaults:  ptDefaultsCm,
 				HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{

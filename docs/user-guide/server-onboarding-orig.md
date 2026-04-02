@@ -58,7 +58,7 @@ name matching the `resourcePoolId` value. Servers within a resource pool should 
 homogeneous (same hardware type and configuration) so that any server in the pool can
 satisfy a provisioning request targeting that pool.
 
-Create a namespace for your servers:
+Create a namespace for your dell xr8620t servers:
 
 ```yaml
 apiVersion: v1
@@ -76,7 +76,7 @@ be in the same namespace as the BareMetalHost:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: bmc-secret-dell-xr8620t-sno1
+  name: bmc-secret-dell-xr8620t-node1
   namespace: dell-xr8620t-pool
 type: Opaque
 data:
@@ -86,16 +86,22 @@ data:
 
 ## Preprovisioning Network Data Secret
 
-Each server requires a Secret containing an nmstate network configuration for the
-preprovisioning phase. This configuration is built into the Metal3 discovery ISO used
-during hardware inspection to provide network connectivity. Without it, the host will
-not have networking and inspection will fail.
+The preprovisioning network data Secret contains an nmstate network configuration
+that is built into the Metal3 discovery ISO used during hardware inspection. This
+Secret is **optional** — if not provided, all interfaces will default to up and
+DHCP-enabled during discovery and inspection.
 
-The Secret must be named `network-data-<bmh-name>` (e.g., `network-data-dell-xr8620t-sno1`
-for a BMH named `dell-xr8620t-sno1`). This naming convention is required by the Metal3
-hardware plugin, which uses it to restore the Secret reference during deprovisioning.
+You will need a network data Secret if:
 
-The Secret is referenced by the BMH's `preprovisioningNetworkDataName` field.
+- You are using static IP addresses for the inspection network
+- You need to configure VLANs for network connectivity during inspection
+- You need to customize DNS resolver settings or other network parameters
+
+If provided, the Secret is referenced by the BMH's `spec.preprovisioningNetworkDataName`
+field. Multiple BMHs can share a common network data Secret, as long as the same
+configuration applies to each BMH. For example, BMHs on the same VLAN with DHCP
+could share a single Secret, but BMHs with static IP addresses would each need
+their own Secret.
 
 > [!WARNING]
 > Interface names in the nmstate configuration must use the standard device name as
@@ -103,13 +109,13 @@ The Secret is referenced by the BMH's `preprovisioningNetworkDataName` field.
 > The device names may differ from those assigned by other Linux distributions. Using
 > alternate names can cause inspection failures, particularly with VLAN configurations.
 
-Basic example:
+DHCP example:
 
 ```yaml
 apiVersion: v1
 kind: Secret
 metadata:
-  name: network-data-dell-xr8620t-sno1
+  name: network-data-dell-xr8620t-node1
   namespace: dell-xr8620t-pool
 type: Opaque
 stringData:
@@ -132,6 +138,12 @@ stringData:
 VLAN example:
 
 ```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: network-data-vlan310
+  namespace: dell-xr8620t-pool
+type: Opaque
 stringData:
   nmstate: |
     interfaces:
@@ -223,7 +235,7 @@ matched against the `resourceSelector` field in the
 ```yaml
 resourceselector.clcm.openshift.io/server-type: XR8620t
 resourceselector.clcm.openshift.io/server-colour: blue
-resourceselector.clcm.openshift.io/server-id: dell-xr8620t-sno1
+resourceselector.clcm.openshift.io/server-id: dell-xr8620t-node1
 resourceselector.clcm.openshift.io/subnet: "192.0.2.0"
 ```
 
@@ -253,7 +265,7 @@ Key fields in the BareMetalHost spec:
 | `spec.bmc.credentialsName` | Name of the BMC credentials Secret |
 | `spec.bmc.disableCertificateVerification` | Set to `true` if the BMC uses a self-signed certificate |
 | `spec.bootMACAddress` | MAC address of the boot NIC. Optional if `boot-interface` label is set. |
-| `spec.preprovisioningNetworkDataName` | Name of the network data Secret containing nmstate configuration for inspection. |
+| `spec.preprovisioningNetworkDataName` | Optional. Name of the network data Secret containing nmstate configuration for inspection. If not set, inspection uses DHCP on all interfaces. |
 
 ## Hardware Inspection
 
@@ -295,7 +307,7 @@ metadata:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: network-data-dell-xr8620t-sno1
+  name: network-data-dell-xr8620t-node1
   namespace: dell-xr8620t-pool
 type: Opaque
 stringData:
@@ -320,7 +332,7 @@ data:
   password: <base64-encoded-password>
 kind: Secret
 metadata:
-  name: bmc-secret-dell-xr8620t-sno1
+  name: bmc-secret-dell-xr8620t-node1
   namespace: dell-xr8620t-pool
 type: Opaque
 ---
@@ -332,7 +344,7 @@ metadata:
     resources.clcm.openshift.io/resourcePoolId: dell-xr8620t-pool
     resourceselector.clcm.openshift.io/server-colour: blue
     resourceselector.clcm.openshift.io/server-type: XR8620t
-    resourceselector.clcm.openshift.io/server-id: dell-xr8620t-sno1
+    resourceselector.clcm.openshift.io/server-id: dell-xr8620t-node1
     interfacelabel.clcm.openshift.io/boot-interface: ens3f0
     interfacelabel.clcm.openshift.io/data-interface: ens3f1
     interfacelabel.clcm.openshift.io/sriov-1: ens2f0
@@ -341,16 +353,16 @@ metadata:
     resourceinfo.clcm.openshift.io/description: "XR8620t server with Blue label"
     resourceinfo.clcm.openshift.io/partNumber: "00001"
     resourceinfo.clcm.openshift.io/groups: "groupA, groupB"
-  name: dell-xr8620t-sno1
+  name: dell-xr8620t-node1
   namespace: dell-xr8620t-pool
 spec:
   online: false
   bmc:
     address: idrac-virtualmedia+https://198.51.100.10/redfish/v1/Systems/System.Embedded.1
-    credentialsName: bmc-secret-dell-xr8620t-sno1
+    credentialsName: bmc-secret-dell-xr8620t-node1
     disableCertificateVerification: true
   bootMACAddress: 02:00:00:00:00:01
-  preprovisioningNetworkDataName: network-data-dell-xr8620t-sno1
+  preprovisioningNetworkDataName: network-data-dell-xr8620t-node1 # Optional — can be omitted if using DHCP and no custom configuration
 ```
 
 Additional sample files are available under

@@ -183,7 +183,7 @@ var _ = Describe("handleRenderHardwareTemplate", func() {
 			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
-				templates: provisioningv1alpha1.Templates{
+				templates: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 						HardwarePluginRef: testMetal3HardwarePluginRef,
 					},
@@ -403,7 +403,7 @@ var _ = Describe("waitForNodeAllocationRequestProvision", func() {
 			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
-				templates: provisioningv1alpha1.Templates{
+				templates: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 						HardwarePluginRef: testMetal3HardwarePluginRef,
 					},
@@ -697,7 +697,7 @@ var _ = Describe("createOrUpdateNodeAllocationRequest", func() {
 			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
-				templates: provisioningv1alpha1.Templates{
+				templates: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 						HardwarePluginRef: testMetal3HardwarePluginRef,
 					},
@@ -873,7 +873,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			ctDetails: &clusterTemplateDetails{
 				namespace: "test-ns",
-				templates: provisioningv1alpha1.Templates{
+				templates: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 						HardwarePluginRef: testMetal3HardwarePluginRef,
 					},
@@ -921,7 +921,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		for i := range nar.NodeGroup {
 			if nar.NodeGroup[i].NodeGroupData.Name == "controller" {
 				masterGroup = &nar.NodeGroup[i]
-			} else if nar.NodeGroup[i].NodeGroupData.Name == "worker" {
+			} else if nar.NodeGroup[i].NodeGroupData.Name == groupNameWorker {
 				workerGroup = &nar.NodeGroup[i]
 			}
 		}
@@ -1061,7 +1061,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		for i := range nar.NodeGroup {
 			if nar.NodeGroup[i].NodeGroupData.Name == "controller" {
 				controllerGroup = &nar.NodeGroup[i]
-			} else if nar.NodeGroup[i].NodeGroupData.Name == "worker" {
+			} else if nar.NodeGroup[i].NodeGroupData.Name == groupNameWorker {
 				workerGroup = &nar.NodeGroup[i]
 			}
 		}
@@ -1101,7 +1101,7 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 		Expect(nar.NodeGroup[0].NodeGroupData.HwProfile).To(Equal("template-profile-1"))
 	})
 
-	It("returns error when nodeGroup has no hwProfile, resourcePoolId, or resourceSelector", func() {
+	It("succeeds when nodeGroup has no hwProfile, resourcePoolId, or resourceSelector", func() {
 		clusterInstance := &unstructured.Unstructured{}
 		clusterInstance.Object = map[string]interface{}{
 			"spec": map[string]interface{}{
@@ -1117,15 +1117,16 @@ var _ = Describe("buildNodeAllocationRequest", func() {
 			hwMgmtData: map[string]any{
 				"nodeGroupData": []any{
 					map[string]any{"name": "controller", "role": "master"},
-					// No hwProfile, resourcePoolId, or resourceSelector
 				},
 			},
 		}
 
 		nar, err := task.buildNodeAllocationRequest(clusterInstance)
-		Expect(err).To(HaveOccurred())
-		Expect(nar).To(BeNil())
-		Expect(err.Error()).To(ContainSubstring("must specify at least one of"))
+		Expect(err).ToNot(HaveOccurred())
+		Expect(nar).ToNot(BeNil())
+		Expect(nar.NodeGroup).To(HaveLen(1))
+		Expect(nar.NodeGroup[0].NodeGroupData.Name).To(Equal("controller"))
+		Expect(nar.NodeGroup[0].NodeGroupData.Role).To(Equal("master"))
 	})
 })
 
@@ -1161,7 +1162,7 @@ var _ = Describe("updateAllocatedNodeHostMap", func() {
 			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			ctDetails: &clusterTemplateDetails{
 				namespace: "test-ns",
-				templates: provisioningv1alpha1.Templates{
+				templates: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 						HardwarePluginRef: testMetal3HardwarePluginRef,
 					},
@@ -1268,7 +1269,7 @@ var _ = Describe("waitForHardwareData", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 						HardwarePluginRef:           testMetal3HardwarePluginRef,
 						HardwareProvisioningTimeout: "90m",
@@ -1304,7 +1305,7 @@ var _ = Describe("waitForHardwareData", func() {
 			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
-				templates: provisioningv1alpha1.Templates{
+				templates: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 						HardwarePluginRef: testMetal3HardwarePluginRef,
 					},
@@ -1452,7 +1453,7 @@ var _ = Describe("checkExistingNodeAllocationRequest", func() {
 			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			ctDetails: &clusterTemplateDetails{
 				namespace: "test-ns",
-				templates: provisioningv1alpha1.Templates{
+				templates: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 						HardwarePluginRef: testMetal3HardwarePluginRef,
 					},
@@ -1589,7 +1590,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 						HardwarePluginRef:           testMetal3HardwarePluginRef,
 						HardwareProvisioningTimeout: "90m",
@@ -1681,7 +1682,7 @@ var _ = Describe("applyNodeConfiguration", func() {
 			client: reconciler.Client,
 			object: cr,
 			ctDetails: &clusterTemplateDetails{
-				templates: provisioningv1alpha1.Templates{
+				templates: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 						HardwarePluginRef:           testMetal3HardwarePluginRef,
 						HardwareProvisioningTimeout: "90m",
@@ -1807,15 +1808,6 @@ var _ = Describe("applyNodeConfiguration", func() {
 		err := task.applyNodeConfiguration(ctx, emptyHwNodes, nar, ci)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to find matches for the following nodes"))
-	})
-
-	It("returns error when hardware provisioning is skipped", func() {
-		// Set hardware template to empty to skip hardware provisioning
-		task.ctDetails.templates.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{}
-
-		err := task.applyNodeConfiguration(ctx, hwNodes, nar, ci)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("failed to get boot MAC for node"))
 	})
 
 	It("handles nodes without HwMgrNodeId and HwMgrNodeNs", func() {
@@ -1979,7 +1971,7 @@ var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", fun
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Release: "4.17.0",
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					ClusterInstanceDefaults: "test-cluster-defaults",
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 						HardwarePluginRef:           testMetal3HardwarePluginRef,
@@ -2051,7 +2043,7 @@ var _ = Describe("ProvisioningRequest Status Update After Hardware Failure", fun
 			object:       cr,
 			clusterInput: &clusterInput{},
 			ctDetails: &clusterTemplateDetails{
-				templates: provisioningv1alpha1.Templates{
+				templates: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 						HardwarePluginRef: testMetal3HardwarePluginRef,
 					},
@@ -2278,7 +2270,7 @@ var _ = Describe("processExistingHardwareCondition", func() {
 			callbackConfig: utils.NewNarCallbackConfig(constants.DefaultNarCallbackServicePort),
 			ctDetails: &clusterTemplateDetails{
 				namespace: "test-ns",
-				templates: provisioningv1alpha1.Templates{
+				templates: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 						HardwarePluginRef: testMetal3HardwarePluginRef,
 					},

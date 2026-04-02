@@ -171,7 +171,7 @@ var _ = Describe("policyManagement", func() {
 					Version:    tVersion,
 					TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
 					Release:    "4.15.0",
-					Templates: provisioningv1alpha1.Templates{
+					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 						ClusterInstanceDefaults: ciDefaultsCm,
 						PolicyTemplateDefaults:  ptDefaultsCm,
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
@@ -1857,7 +1857,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 					Version:    tVersion,
 					TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
 					Release:    "4.15.0",
-					Templates: provisioningv1alpha1.Templates{
+					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 						ClusterInstanceDefaults: ciDefaultsCm,
 						PolicyTemplateDefaults:  ptDefaultsCm,
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
@@ -1970,7 +1970,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 			hwpluginClient: hwpluginClient,
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
-				templates: provisioningv1alpha1.Templates{
+				templates: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 						HardwarePluginRef:           utils.UnitTestHwPluginRef,
 						HardwareProvisioningTimeout: "1m",
@@ -2352,7 +2352,7 @@ var _ = Describe("addPostProvisioningLabels", func() {
 				Name:      GetClusterTemplateRefName(tName, tVersion),
 				Namespace: ctNamespace,
 			}, ct)).To(Succeed())
-			ct.Spec.Templates.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{}
+			ct.Spec.TemplateDefaults.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{}
 			Expect(c.Update(ctx, ct)).To(Succeed())
 			// Also update the task's ctDetails to match.
 			ProvReqTask.ctDetails.templates.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{}

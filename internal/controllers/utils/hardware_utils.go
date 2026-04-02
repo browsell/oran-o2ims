@@ -312,11 +312,7 @@ func GetHardwarePluginRefFromProvisioningRequest(ctx context.Context, c client.C
 		return "", fmt.Errorf("failed to get ClusterTemplate: %w", err)
 	}
 
-	if len(clusterTemplate.Spec.Templates.HwMgmtDefaults.NodeGroupData) == 0 {
-		return "", fmt.Errorf("missing hwMgmtDefaults in ClusterTemplate")
-	}
-
-	return clusterTemplate.Spec.Templates.HwMgmtDefaults.GetHardwarePluginRef(), nil
+	return clusterTemplate.Spec.TemplateDefaults.HwMgmtDefaults.GetHardwarePluginRef(), nil
 }
 
 // GetHardwarePlugin retrieves the HardwarePlugin resource for a given name.

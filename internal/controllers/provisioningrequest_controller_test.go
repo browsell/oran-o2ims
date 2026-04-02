@@ -249,7 +249,7 @@ var _ = Describe("ProvisioningRequestReconciler Unit Tests", func() {
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Release: "4.17.0",
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					UpgradeDefaults: "upgrade-defaults",
 				},
 			},
@@ -930,8 +930,8 @@ plan:
 					Namespace: "test-ns",
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
-					Release:   "4.17.0",
-					Templates: provisioningv1alpha1.Templates{
+					Release:          "4.17.0",
+					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 						// Don't include HwTemplate to avoid hardware plugin dependency
 					},
 				},
@@ -1064,11 +1064,11 @@ plan:
 				}
 				Expect(c.Status().Update(ctx, deletionCR)).To(Succeed())
 
-				// This will fail due to missing hwMgmtDefaults, which is expected behavior
+				// This will fail due to missing HardwarePlugin resource, which is expected behavior
 				// when the test setup doesn't include proper hardware plugin dependencies
 				_, err := deletionReconciler.handleProvisioningRequestDeletion(ctx, deletionCR)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("missing hwMgmtDefaults"))
+				Expect(err.Error()).To(ContainSubstring("failed to get HardwarePlugin client"))
 			})
 		})
 
@@ -1281,7 +1281,7 @@ plan:
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
 					Release: "4.17.0",
-					Templates: provisioningv1alpha1.Templates{
+					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 						ClusterInstanceDefaults: "test-cluster-defaults",
 						PolicyTemplateDefaults:  "test-policy-defaults",
 					},
@@ -1616,7 +1616,7 @@ plan:
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
 					Release: "4.17.0",
-					Templates: provisioningv1alpha1.Templates{
+					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 						ClusterInstanceDefaults: "test-cluster-defaults",
 						PolicyTemplateDefaults:  "test-policy-defaults",
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
@@ -2178,7 +2178,7 @@ plan:
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
 					Name:    "test-skip-template",
 					Version: "v1.0.0",
-					Templates: provisioningv1alpha1.Templates{
+					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 						ClusterInstanceDefaults: "skip-defaults-cm",
 					},
 					TemplateParameterSchema: runtime.RawExtension{
@@ -2284,7 +2284,7 @@ plan:
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
 					Name:    "test-no-hw",
 					Version: "v1.0.0",
-					Templates: provisioningv1alpha1.Templates{
+					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 						ClusterInstanceDefaults: "no-hw-defaults-cm",
 						// HwTemplate is empty - indicates no hardware provisioning
 					},
@@ -2416,7 +2416,7 @@ nodes:
 				object: cr,
 				ctDetails: &clusterTemplateDetails{
 					namespace: testNs,
-					templates: provisioningv1alpha1.Templates{
+					templates: provisioningv1alpha1.TemplateDefaults{
 						ClusterInstanceDefaults: "no-hw-defaults-cm",
 						// No HwTemplate - this is key for no-hardware-provisioning
 					},
@@ -3147,7 +3147,7 @@ var _ = Describe("ProvisioningRequestReconciler Policy Tests", func() {
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Release: "4.17.0",
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					UpgradeDefaults:        "upgrade-defaults",
 					PolicyTemplateDefaults: "policy-defaults",
 				},
@@ -3560,7 +3560,7 @@ var _ = Describe("ProvisioningRequestReconciler Integration with Mock Hardware",
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Release: "4.17.0",
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					UpgradeDefaults: "upgrade-defaults",
 				},
 			},
@@ -3804,7 +3804,7 @@ plan:
 
 			Context("when upgrade defaults ConfigMap is missing", func() {
 				BeforeEach(func() {
-					clusterTemplate.Spec.Templates.UpgradeDefaults = "non-existent"
+					clusterTemplate.Spec.TemplateDefaults.UpgradeDefaults = "non-existent"
 					Expect(c.Update(ctx, clusterTemplate)).To(Succeed())
 				})
 
@@ -4701,7 +4701,7 @@ plan:
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
 					Release: "4.17.0",
-					Templates: provisioningv1alpha1.Templates{
+					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 						ClusterInstanceDefaults: "test-cluster-defaults",
 						PolicyTemplateDefaults:  "test-policy-defaults",
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
@@ -4757,7 +4757,7 @@ plan:
 				object:       deployConfigCR,
 				clusterInput: &clusterInput{},
 				ctDetails: &clusterTemplateDetails{
-					templates: provisioningv1alpha1.Templates{
+					templates: provisioningv1alpha1.TemplateDefaults{
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 							HardwareProvisioningTimeout: "90m",
 							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
@@ -4869,7 +4869,8 @@ plan:
 		Context("when hardware provisioning is skipped", func() {
 			BeforeEach(func() {
 				// Ensure hardware template is empty to skip hardware provisioning
-				deployConfigTemplate.Spec.Templates.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{}
+				deployConfigTemplate.Spec.TemplateDefaults.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{}
+				deployConfigTask.ctDetails.templates.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{}
 				Expect(c.Update(ctx, deployConfigTemplate)).To(Succeed())
 			})
 
@@ -5278,7 +5279,7 @@ plan:
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
 					Release: "4.17.0",
-					Templates: provisioningv1alpha1.Templates{
+					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 						ClusterInstanceDefaults: "test-cluster-defaults",
 						PolicyTemplateDefaults:  "test-policy-defaults",
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
@@ -5336,7 +5337,7 @@ plan:
 				object:       provisioningRequest,
 				clusterInput: &clusterInput{},
 				ctDetails: &clusterTemplateDetails{
-					templates: provisioningv1alpha1.Templates{
+					templates: provisioningv1alpha1.TemplateDefaults{
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 							HardwareProvisioningTimeout: "90m",
 							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
@@ -5577,7 +5578,7 @@ plan:
 				client: c,
 				object: testObject,
 				ctDetails: &clusterTemplateDetails{
-					templates: provisioningv1alpha1.Templates{
+					templates: provisioningv1alpha1.TemplateDefaults{
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 							HardwareProvisioningTimeout: "30m",
 							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
@@ -5959,7 +5960,7 @@ clustertemplate-test-policy-v1-cpu-reserved: "0-1"`,
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
 					Name:    "test-template",
 					Version: "v1.0.0",
-					Templates: provisioningv1alpha1.Templates{
+					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 							HardwareProvisioningTimeout: "30m",
 							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
@@ -6024,7 +6025,7 @@ clustertemplate-test-policy-v1-cpu-reserved: "0-1"`,
 				object:       testObject,
 				clusterInput: &clusterInput{},
 				ctDetails: &clusterTemplateDetails{
-					templates: provisioningv1alpha1.Templates{
+					templates: provisioningv1alpha1.TemplateDefaults{
 						HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 							HardwareProvisioningTimeout: "30m",
 							NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
@@ -6158,7 +6159,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 				Namespace: ctNamespace,
 			},
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 						HardwareProvisioningTimeout: "30m",
 						NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
@@ -6192,7 +6193,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 			clusterInput: &clusterInput{},
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
-				templates: ct.Spec.Templates,
+				templates: ct.Spec.TemplateDefaults,
 			},
 			timeouts: &timeouts{
 				hardwareProvisioning: utils.DefaultHardwareProvisioningTimeout,
@@ -6252,7 +6253,7 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 
 	It("should append new node groups from parameters", func() {
 		// Use a ClusterTemplate with only one node group in defaults
-		ct.Spec.Templates.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{
+		ct.Spec.TemplateDefaults.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{
 			NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 				{Name: "controller", Role: "master", HwProfile: "profile-64G"},
 			},
@@ -6278,10 +6279,10 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 	})
 
 	It("should return error for invalid timeout in merged data", func() {
-		ct.Spec.Templates.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{
+		ct.Spec.TemplateDefaults.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{
 			HardwareProvisioningTimeout: "60",
 			NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-				{Name: "controller", Role: "master"},
+				{Name: "controller", Role: "master", ResourcePoolId: "pool-1"},
 			},
 		}
 		c = getFakeClientFromObjects()
@@ -6307,9 +6308,9 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 	})
 
 	It("should keep default timeout when no override provided", func() {
-		ct.Spec.Templates.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{
+		ct.Spec.TemplateDefaults.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{
 			NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
-				{Name: "controller", Role: "master"},
+				{Name: "controller", Role: "master", ResourcePoolId: "pool-1"},
 			},
 		}
 		c = getFakeClientFromObjects(createHwProfiles()...)
@@ -6318,5 +6319,85 @@ var _ = Describe("validateAndMergeHwMgmtInput", func() {
 		err := task.validateAndMergeHwMgmtInput(ctx, ct)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(task.timeouts.hardwareProvisioning).To(Equal(utils.DefaultHardwareProvisioningTimeout))
+	})
+
+	It("should return error for zero timeout in defaults", func() {
+		ct.Spec.TemplateDefaults.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{
+			HardwareProvisioningTimeout: "0s",
+			NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
+				{Name: "controller", Role: "master", ResourcePoolId: "pool-1"},
+			},
+		}
+		c = getFakeClientFromObjects()
+		task = buildTask(c, `{"nodeClusterName": "test"}`)
+
+		err := task.validateAndMergeHwMgmtInput(ctx, ct)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("must be a positive duration"))
+	})
+
+	It("should return error for negative timeout in PR override", func() {
+		c = getFakeClientFromObjects(createHwProfiles()...)
+		task = buildTask(c, `{
+			"nodeClusterName": "test",
+			"hwMgmtParameters": {
+				"hardwareProvisioningTimeout": "-5m"
+			}
+		}`)
+
+		err := task.validateAndMergeHwMgmtInput(ctx, ct)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("must be a positive duration"))
+	})
+
+	It("should accept resourceSelector as a valid map", func() {
+		hwProfiles := append(createHwProfiles(),
+			&hwmgmtv1alpha1.HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: "profile-spr-single-processor-64G", Namespace: utils.InventoryNamespace},
+			},
+		)
+		c = getFakeClientFromObjects(hwProfiles...)
+		task = buildTask(c, `{
+			"nodeClusterName": "test",
+			"hwMgmtParameters": {
+				"nodeGroupData": [
+					{
+						"name": "controller",
+						"hwProfile": "profile-spr-single-processor-64G",
+						"resourceSelector": {"server-colour": "green"}
+					}
+				]
+			}
+		}`)
+
+		err := task.validateAndMergeHwMgmtInput(ctx, ct)
+		Expect(err).ToNot(HaveOccurred())
+		ngData := task.clusterInput.hwMgmtData["nodeGroupData"].([]any)
+		controllerNG := ngData[0].(map[string]any)
+		rs := controllerNG["resourceSelector"].(map[string]any)
+		Expect(rs["server-colour"]).To(Equal("green"))
+	})
+
+	It("should accept nodeGroup with no resourceSelector", func() {
+		hwProfiles := append(createHwProfiles(),
+			&hwmgmtv1alpha1.HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: "profile-spr-single-processor-64G", Namespace: utils.InventoryNamespace},
+			},
+		)
+		c = getFakeClientFromObjects(hwProfiles...)
+		task = buildTask(c, `{
+			"nodeClusterName": "test",
+			"hwMgmtParameters": {
+				"nodeGroupData": [
+					{
+						"name": "controller",
+						"hwProfile": "profile-spr-single-processor-64G"
+					}
+				]
+			}
+		}`)
+
+		err := task.validateAndMergeHwMgmtInput(ctx, ct)
+		Expect(err).ToNot(HaveOccurred())
 	})
 })

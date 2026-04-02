@@ -125,6 +125,12 @@ spec:
         path: release
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      - description: TemplateDefaults defines the default values for templates required
+          for ClusterTemplate.
+        displayName: TemplateDefaults
+        path: templateDefaults
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
       - description: TemplateId defines a Identifier for the O-Cloud Template. This
           identifier is allocated by the O-Cloud.
         displayName: TemplateId
@@ -137,12 +143,6 @@ spec:
           explicitly define required fields.
         displayName: Template Parameter Schema
         path: templateParameterSchema
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: Templates defines the references to the templates required for
-          ClusterTemplate.
-        displayName: Templates
-        path: templates
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: Version defines a version or generation of the resource as defined

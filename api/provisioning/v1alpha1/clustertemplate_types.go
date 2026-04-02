@@ -41,9 +41,9 @@ type ClusterTemplateSpec struct {
 	// Release defines the openshift release version of the template
 	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Release",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
 	Release string `json:"release"`
-	// Templates defines the references to the templates required for ClusterTemplate.
-	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="Templates",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
-	Templates Templates `json:"templates"`
+	// TemplateDefaults defines the default values for templates required for ClusterTemplate.
+	//+operator-sdk:csv:customresourcedefinitions:type=spec,displayName="TemplateDefaults",xDescriptors={"urn:alm:descriptor:com.tectonic.ui:text"}
+	TemplateDefaults TemplateDefaults `json:"templateDefaults"`
 	// TemplateParameterSchema defines the parameters required for ClusterTemplate.
 	// The parameter definitions should follow the OpenAPI V3 schema and
 	// explicitly define required fields.
@@ -79,8 +79,8 @@ func (d *HwMgmtDefaults) GetHardwarePluginRef() string {
 	return d.HardwarePluginRef
 }
 
-// Templates defines the references to the templates required for ClusterTemplate.
-type Templates struct {
+// TemplateDefaults defines the default values for templates required for ClusterTemplate.
+type TemplateDefaults struct {
 	// HwMgmtDefaults defines the default hardware management parameters.
 	// When nodeGroupData is empty, hardware provisioning is skipped.
 	// +optional

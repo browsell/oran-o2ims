@@ -409,15 +409,9 @@ func (t *provisioningRequestReconcilerTask) applyNodeConfiguration(
 			updatedNode["hostRef"] = hostRef
 		}
 		// Boot MAC
-		bootMAC := ""
-		if !t.isHardwareProvisionSkipped() {
-
-			bootMAC, err = ctlrutils.GetBootMacAddress(nodeInfos[0].Interfaces, constants.BootInterfaceLabel)
-			if err != nil {
-				return fmt.Errorf("failed to get boot MAC for node '%s': %w", hostName, err)
-			}
-		} else {
-			return fmt.Errorf("failed to get boot MAC for node '%s'", hostName)
+		bootMAC, err := ctlrutils.GetBootMacAddress(nodeInfos[0].Interfaces, constants.BootInterfaceLabel)
+		if err != nil {
+			return fmt.Errorf("failed to get boot MAC for node '%s': %w", hostName, err)
 		}
 		updatedNode["bootMACAddress"] = bootMAC
 
@@ -807,11 +801,11 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(
 	// Extract nodeGroupData from the pre-merged hwMgmt data
 	nodeGroupDataRaw, ok := hwMgmtData["nodeGroupData"]
 	if !ok {
-		return nil, fmt.Errorf("nodeGroupData not found in merged hwMgmt data")
+		return nil, ctlrutils.NewInputError("nodeGroupData not found in merged hwMgmt data")
 	}
 	nodeGroupDataSlice, ok := nodeGroupDataRaw.([]any)
 	if !ok {
-		return nil, fmt.Errorf("nodeGroupData must be an array")
+		return nil, ctlrutils.NewInputError("nodeGroupData must be an array")
 	}
 
 	nodeGroups := []hwmgrpluginapi.NodeGroup{}
@@ -819,16 +813,19 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(
 	for _, ngRaw := range nodeGroupDataSlice {
 		ngMap, ok := ngRaw.(map[string]any)
 		if !ok {
-			return nil, fmt.Errorf("nodeGroupData element is not a map")
+			return nil, ctlrutils.NewInputError("nodeGroupData element is not a map")
 		}
 
 		name, _ := ngMap["name"].(string)
+		if name == "" {
+			return nil, ctlrutils.NewInputError("nodeGroupData element is missing required field 'name'")
+		}
 		role, _ := ngMap["role"].(string)
 		if role == "" {
-			return nil, fmt.Errorf("no role specified for nodeGroup %q", name)
+			return nil, ctlrutils.NewInputError("no role specified for nodeGroup %q", name)
 		}
 		if prev, exists := seenRoles[role]; exists {
-			return nil, fmt.Errorf("duplicate role %q in nodeGroupData for groups %q and %q", role, prev, name)
+			return nil, ctlrutils.NewInputError("duplicate role %q in nodeGroupData for groups %q and %q", role, prev, name)
 		}
 		seenRoles[role] = name
 		hwProfile, _ := ngMap["hwProfile"].(string)
@@ -841,11 +838,6 @@ func (t *provisioningRequestReconcilerTask) buildNodeAllocationRequest(
 					resourceSelector[k] = vStr
 				}
 			}
-		}
-
-		if hwProfile == "" && resourcePoolId == "" && len(resourceSelector) == 0 {
-			return nil, fmt.Errorf(
-				"nodeGroup %q must specify at least one of hwProfile, resourcePoolId, or resourceSelector", name)
 		}
 
 		ngd := hwmgrpluginapi.NodeGroupData{

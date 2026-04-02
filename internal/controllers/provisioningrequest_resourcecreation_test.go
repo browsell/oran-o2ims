@@ -367,7 +367,7 @@ var _ = Describe("createOrUpdateClusterResources", func() {
 			clusterInput: &clusterInput{},
 			ctDetails: &clusterTemplateDetails{
 				namespace: ctNamespace,
-				templates: provisioningv1alpha1.Templates{},
+				templates: provisioningv1alpha1.TemplateDefaults{},
 			},
 		}
 	})

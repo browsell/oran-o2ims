@@ -463,7 +463,7 @@ var _ = Describe("GetClusterTemplateRef", func() {
 				Name:       "other-cluster-template-name",
 				Version:    "v1.0.0",
 				TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
-				Templates: Templates{
+				TemplateDefaults: TemplateDefaults{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 				},
@@ -494,7 +494,7 @@ var _ = Describe("GetClusterTemplateRef", func() {
 				Name:       tName,
 				Version:    tVersion,
 				TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
-				Templates: Templates{
+				TemplateDefaults: TemplateDefaults{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 				},
@@ -517,8 +517,8 @@ var _ = Describe("GetClusterTemplateRef", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(retCt.Name).To(Equal(ctName))
 		Expect(retCt.Namespace).To(Equal(ctNamespace))
-		Expect(retCt.Spec.Templates.ClusterInstanceDefaults).To(Equal(ciDefaultsCm))
-		Expect(retCt.Spec.Templates.PolicyTemplateDefaults).To(Equal(ptDefaultsCm))
+		Expect(retCt.Spec.TemplateDefaults.ClusterInstanceDefaults).To(Equal(ciDefaultsCm))
+		Expect(retCt.Spec.TemplateDefaults.PolicyTemplateDefaults).To(Equal(ptDefaultsCm))
 	})
 })
 
@@ -554,12 +554,26 @@ const testTemplate = `{
 		  }
 		}
 	  },
-	  "hwTemplateParameters": {
-		"description": "hwTemplateParameters.",
+	  "hwMgmtParameters": {
+		"description": "hwMgmtParameters allows overriding hardware management defaults.",
 		"type": "object",
 		"properties": {
+		  "hardwareProvisioningTimeout": {
+			"type": "string"
+		  },
 		  "nodeGroupData": {
-			"type": "object"
+			"type": "array",
+			"items": {
+			  "type": "object",
+			  "required": ["name"],
+			  "properties": {
+				"name": {"type": "string"},
+				"role": {"type": "string"},
+				"hwProfile": {"type": "string"},
+				"resourcePoolId": {"type": "string"},
+				"resourceSelector": {"type": "object", "additionalProperties": {"type": "string"}}
+			  }
+			}
 		  }
 		}
 	  }
