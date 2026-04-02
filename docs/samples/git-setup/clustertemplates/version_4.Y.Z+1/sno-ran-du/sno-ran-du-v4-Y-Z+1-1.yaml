@@ -7,7 +7,7 @@ spec:
   name: sno-ran-du
   version: v4-Y-Z+1-1
   release: 4.Y.Z+1
-  templates:
+  templateDefaults:
     hwMgmtDefaults:
       hardwareProvisioningTimeout: "90m"
       nodeGroupData:

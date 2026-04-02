@@ -7,7 +7,7 @@ spec:
   name: std-dell-r740-green-xr8620t-blue
   version: v4-20-15-v1
   release: 4.20.15
-  templates:
+  templateDefaults:
     hwMgmtDefaults:
       hardwarePluginRef: hwmgr
       hardwareProvisioningTimeout: "90m"

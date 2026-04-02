@@ -95,6 +95,7 @@ import (
 	. "github.com/onsi/gomega"
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
+	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
 	testutils "github.com/openshift-kni/oran-o2ims/test/utils"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
@@ -134,7 +135,7 @@ var _ = Describe("ClusterTemplateReconciler", func() {
 				Version:    tVersion,
 				Release:    "4.15.0",
 				TemplateID: "57b39bda-ac56-4143-9b10-d1a71517d04f",
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
@@ -197,6 +198,17 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 			},
 		}
 		Expect(c.Create(ctx, clusterImageSet)).To(Succeed())
+
+		// Create HardwareProfile CRs referenced by hwMgmtDefaults
+		for _, name := range []string{"profile-spr-single-processor-64G", "profile-spr-single-processor-128G"} {
+			hwProfile := &hwmgmtv1alpha1.HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      name,
+					Namespace: ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace),
+				},
+			}
+			Expect(c.Create(ctx, hwProfile)).To(Succeed())
+		}
 
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
@@ -268,9 +280,9 @@ var _ = Describe("enqueueClusterTemplatesForConfigmap", func() {
 					Namespace: "cluster-template-a",
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
-					Name:      "cluster-template-a",
-					Version:   "v1",
-					Templates: provisioningv1alpha1.Templates{},
+					Name:             "cluster-template-a",
+					Version:          "v1",
+					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{},
 				},
 			},
 			{
@@ -279,9 +291,9 @@ var _ = Describe("enqueueClusterTemplatesForConfigmap", func() {
 					Namespace: "cluster-template-a",
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
-					Name:      "cluster-template-a",
-					Version:   "v2",
-					Templates: provisioningv1alpha1.Templates{},
+					Name:             "cluster-template-a",
+					Version:          "v2",
+					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{},
 				},
 			},
 			{
@@ -290,9 +302,9 @@ var _ = Describe("enqueueClusterTemplatesForConfigmap", func() {
 					Namespace: "cluster-template-b",
 				},
 				Spec: provisioningv1alpha1.ClusterTemplateSpec{
-					Name:      "cluster-template-b",
-					Version:   "v1",
-					Templates: provisioningv1alpha1.Templates{},
+					Name:             "cluster-template-b",
+					Version:          "v1",
+					TemplateDefaults: provisioningv1alpha1.TemplateDefaults{},
 				},
 			},
 		}
@@ -320,9 +332,9 @@ var _ = Describe("enqueueClusterTemplatesForConfigmap", func() {
 	})
 
 	It("should enqueue ClusterTemplates referencing the clusterinstance defaults ConfigMap", func() {
-		cts[0].Spec.Templates.ClusterInstanceDefaults = ciDefaultsCm
-		cts[1].Spec.Templates.ClusterInstanceDefaults = ciDefaultsCm
-		cts[2].Spec.Templates.ClusterInstanceDefaults = ciDefaultsCm
+		cts[0].Spec.TemplateDefaults.ClusterInstanceDefaults = ciDefaultsCm
+		cts[1].Spec.TemplateDefaults.ClusterInstanceDefaults = ciDefaultsCm
+		cts[2].Spec.TemplateDefaults.ClusterInstanceDefaults = ciDefaultsCm
 
 		Expect(c.Update(ctx, cts[0])).To(Succeed())
 		Expect(c.Update(ctx, cts[1])).To(Succeed())
@@ -340,9 +352,9 @@ var _ = Describe("enqueueClusterTemplatesForConfigmap", func() {
 	})
 
 	It("should not enqueue ClusterTemplates not referencing the clusterinstance defaults ConfigMap", func() {
-		cts[0].Spec.Templates.ClusterInstanceDefaults = "clusterinstance-defaults-v2"
-		cts[1].Spec.Templates.ClusterInstanceDefaults = "clusterinstance-defaults-v2"
-		cts[2].Spec.Templates.ClusterInstanceDefaults = ciDefaultsCm
+		cts[0].Spec.TemplateDefaults.ClusterInstanceDefaults = "clusterinstance-defaults-v2"
+		cts[1].Spec.TemplateDefaults.ClusterInstanceDefaults = "clusterinstance-defaults-v2"
+		cts[2].Spec.TemplateDefaults.ClusterInstanceDefaults = ciDefaultsCm
 
 		Expect(c.Update(ctx, cts[0])).To(Succeed())
 		Expect(c.Update(ctx, cts[1])).To(Succeed())
@@ -520,7 +532,7 @@ var _ = Describe("validateClusterTemplateCR", func() {
 				Name:    tName,
 				Version: tVersion,
 				Release: "4.15.0",
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
@@ -591,6 +603,17 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 			},
 		}
 		Expect(c.Create(ctx, clusterImageSet)).To(Succeed())
+
+		// Create HardwareProfile CRs referenced by hwMgmtDefaults
+		for _, name := range []string{"profile-spr-single-processor-64G", "profile-spr-single-processor-128G"} {
+			hwProfile := &hwmgmtv1alpha1.HardwareProfile{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      name,
+					Namespace: ctlrutils.GetEnvOrDefault(constants.DefaultNamespaceEnvName, constants.DefaultNamespace),
+				},
+			}
+			Expect(c.Create(ctx, hwProfile)).To(Succeed())
+		}
 
 		valid, err := t.validateClusterTemplateCR(ctx)
 		Expect(err).ToNot(HaveOccurred())
@@ -673,7 +696,7 @@ clustertemplate-a-policy-v1-defaultHugepagesSize: "1G"`,
 						Name:    "test-template",
 						Version: "v1.0.0",
 						Release: "4.17.0",
-						Templates: provisioningv1alpha1.Templates{
+						TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 							ClusterInstanceDefaults: "test-ci-defaults",
 							PolicyTemplateDefaults:  "test-pt-defaults",
 						},
@@ -994,7 +1017,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Name:    tName,
 				Version: tVersion,
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
@@ -1021,7 +1044,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Name:    tName,
 				Version: tVersion,
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
@@ -1040,7 +1063,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Name:    tName,
 				Version: tVersion,
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
@@ -1075,7 +1098,7 @@ var _ = Describe("Validate Cluster Instance Name", func() {
 			Spec: provisioningv1alpha1.ClusterTemplateSpec{
 				Name:    tName,
 				Version: tVersion,
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
@@ -1121,7 +1144,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 				Name:       tName,
 				Version:    tVersion,
 				TemplateID: "",
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
@@ -1151,7 +1174,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 				Name:       tName,
 				Version:    tVersion,
 				TemplateID: "kjwchbjkdbckj",
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
@@ -1177,7 +1200,7 @@ var _ = Describe("Validate Cluster Instance TemplateID", func() {
 				Name:       tName,
 				Version:    tVersion,
 				TemplateID: "71ba1920-77f8-4842-a474-010b1af1d40b",
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					ClusterInstanceDefaults: ciDefaultsCm,
 					PolicyTemplateDefaults:  ptDefaultsCm,
 					HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
@@ -1217,7 +1240,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 						Name: GetClusterTemplateRefName(tName, tVersion),
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
-						Templates: provisioningv1alpha1.Templates{
+						TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 							HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 								NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 									{Name: "controller", Role: "master", HwProfile: "profile-64G"},
@@ -1253,7 +1276,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 						Name: GetClusterTemplateRefName(tName, tVersion),
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
-						Templates: provisioningv1alpha1.Templates{
+						TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 							HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 								NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 									{Name: "controller", Role: "master", HwProfile: "profile-64G"},
@@ -1289,7 +1312,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 						Name: GetClusterTemplateRefName(tName, tVersion),
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
-						Templates: provisioningv1alpha1.Templates{
+						TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 							HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 								NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 									{Name: "controller", Role: "master", HwProfile: "profile-64G"},
@@ -1325,7 +1348,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 						Name: GetClusterTemplateRefName(tName, tVersion),
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
-						Templates: provisioningv1alpha1.Templates{
+						TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 							HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 								NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 									{Name: "controller", Role: "master", HwProfile: "profile-64G"},
@@ -1360,7 +1383,7 @@ func Test_validateTemplateParameterSchema(t *testing.T) {
 						Name: GetClusterTemplateRefName(tName, tVersion),
 					},
 					Spec: provisioningv1alpha1.ClusterTemplateSpec{
-						Templates: provisioningv1alpha1.Templates{
+						TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 							HwMgmtDefaults: provisioningv1alpha1.HwMgmtDefaults{
 								NodeGroupData: []hwmgmtv1alpha1.NodeGroupData{
 									{Name: "controller", Role: "master", HwProfile: "profile-64G"},
@@ -1669,7 +1692,7 @@ var _ = Describe("validateUpgradeDefaultsConfigmap", func() {
 				Name:    tName,
 				Version: tVersion,
 				Release: "4.17.0", // This should match the seedImageRef version in tests
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					UpgradeDefaults: configmapName,
 				},
 			},
@@ -1955,7 +1978,7 @@ var _ = Describe("validateClusterImageSetMatchesRelease", func() {
 				Name:    "test-cluster-template",
 				Version: "v1.0.0",
 				Release: "4.17.0",
-				Templates: provisioningv1alpha1.Templates{
+				TemplateDefaults: provisioningv1alpha1.TemplateDefaults{
 					ClusterInstanceDefaults: "test-configmap",
 				},
 			},

@@ -21,6 +21,32 @@ metadata:
             },
             "name": "clustertemplate-sample",
             "release": "4.20.15",
+            "templateDefaults": {
+              "clusterInstanceDefaults": "clustertemplate-sample.v1.0.0-clusterinstance-defaults",
+              "hwMgmtDefaults": {
+                "hardwareProvisioningTimeout": "90m",
+                "nodeGroupData": [
+                  {
+                    "hwProfile": "hardwareprofile-sample",
+                    "name": "controller",
+                    "resourceSelector": {
+                      "resourceselector.clcm.openshift.io/server-type": "xr8620t"
+                    },
+                    "role": "master"
+                  },
+                  {
+                    "hwProfile": "hardwareprofile-sample",
+                    "name": "worker",
+                    "resourceSelector": {
+                      "resourceselector.clcm.openshift.io/server-type": "xr12380c"
+                    },
+                    "role": "worker"
+                  }
+                ]
+              },
+              "policyTemplateDefaults": "clustertemplate-sample.v1.0.0-policytemplate-defaults",
+              "upgradeDefaults": "upgrade-defaults-v1"
+            },
             "templateParameterSchema": {
               "properties": {
                 "clusterInstanceParameters": {
@@ -269,32 +295,6 @@ metadata:
                 "clusterInstanceParameters"
               ],
               "type": "object"
-            },
-            "templates": {
-              "clusterInstanceDefaults": "clustertemplate-sample.v1.0.0-clusterinstance-defaults",
-              "hwMgmtDefaults": {
-                "hardwareProvisioningTimeout": "90m",
-                "nodeGroupData": [
-                  {
-                    "hwProfile": "profile-spr-single-processor-64G",
-                    "name": "controller",
-                    "resourceSelector": {
-                      "resourceselector.clcm.openshift.io/server-type": "xr8620t"
-                    },
-                    "role": "master"
-                  },
-                  {
-                    "hwProfile": "profile-spr-dual-processor-128G",
-                    "name": "worker",
-                    "resourceSelector": {
-                      "resourceselector.clcm.openshift.io/server-type": "xr12380c"
-                    },
-                    "role": "worker"
-                  }
-                ]
-              },
-              "policyTemplateDefaults": "clustertemplate-sample.v1.0.0-policytemplate-defaults",
-              "upgradeDefaults": "upgrade-defaults-v1"
             },
             "version": "v1.0.0"
           },
@@ -562,7 +562,7 @@ metadata:
             "namespace": "oran-o2ims"
           },
           "spec": {
-            "groupName": "controller",
+            "groupName": "master",
             "hardwarePluginRef": "metal3-hwplugin",
             "hwMgrNodeId": "xr8620txserver1",
             "hwMgrNodeNs": "xr8620t-pool",
@@ -647,7 +647,7 @@ metadata:
               {
                 "nodeGroupData": {
                   "hwProfile": "hardwareprofile-sample",
-                  "name": "controller",
+                  "name": "master",
                   "resourceSelector": {
                     "resourceselector.clcm.openshift.io/server-colour": "blue",
                     "resourceselector.clcm.openshift.io/server-type": "xr8620t"
@@ -805,6 +805,12 @@ spec:
         path: release
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
+      - description: TemplateDefaults defines the default values for templates required
+          for ClusterTemplate.
+        displayName: TemplateDefaults
+        path: templateDefaults
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:text
       - description: TemplateId defines a Identifier for the O-Cloud Template. This
           identifier is allocated by the O-Cloud.
         displayName: TemplateId
@@ -817,12 +823,6 @@ spec:
           explicitly define required fields.
         displayName: Template Parameter Schema
         path: templateParameterSchema
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:text
-      - description: Templates defines the references to the templates required for
-          ClusterTemplate.
-        displayName: Templates
-        path: templates
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:text
       - description: Version defines a version or generation of the resource as defined

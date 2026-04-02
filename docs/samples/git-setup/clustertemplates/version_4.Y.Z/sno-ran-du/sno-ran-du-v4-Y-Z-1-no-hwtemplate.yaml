@@ -7,7 +7,7 @@ spec:
   name: sno-ran-du
   version: v4-Y-Z-1-no-hwtemplate
   release: 4.Y.Z
-  templates:
+  templateDefaults:
     clusterInstanceDefaults: clusterinstance-defaults-v1
     policyTemplateDefaults: policytemplate-defaults-v1
   templateParameterSchema:
@@ -28,6 +28,7 @@ spec:
               type: object
               required:
                 - name
+                - role
               properties:
                 name:
                   type: string

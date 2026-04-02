@@ -225,11 +225,6 @@ const (
 	ClusterZtpNotDone = "ZTP Not Done"
 )
 
-// Hardware management constants
-const (
-	HwTemplateExtensions = "extensions"
-)
-
 const (
 	OperationTypeCreated = "created"
 	OperationTypeUpdated = "updated"

@@ -13,7 +13,8 @@ hwMgmtParameters:
       description: >
         Per-nodeGroup overrides, matched by name against the
         ClusterTemplate's hwMgmtDefaults.nodeGroupData entries.
-        New node groups can be added by specifying a name not in the defaults.
+        New node groups can be added by specifying a name not in the defaults;
+        new groups must include the role field (master or worker).
       type: array
       items:
         type: object
@@ -27,6 +28,15 @@ hwMgmtParameters:
               add a node group.
             type: string
             minLength: 1
+          role:
+            description: >
+              Role of the node group. Required when adding a new node group
+              that does not exist in the ClusterTemplate hwMgmtDefaults.
+              For overrides of existing groups, role is inherited from the defaults.
+            type: string
+            enum:
+              - master
+              - worker
           hwProfile:
             description: >
               Name of the HardwareProfile CR to use for this node group.

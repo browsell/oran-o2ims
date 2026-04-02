@@ -13,7 +13,7 @@ spec:
     performanceProfile: du
     sriov: enabled
     ptp: enabled
-  templates:
+  templateDefaults:
     hwMgmtDefaults:
       hardwareProvisioningTimeout: "90m"
       nodeGroupData:

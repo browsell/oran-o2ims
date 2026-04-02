@@ -74,20 +74,9 @@ spec:
                 description: Release defines the openshift release version of the
                   template
                 type: string
-              templateId:
-                description: TemplateId defines a Identifier for the O-Cloud Template.
-                  This identifier is allocated by the O-Cloud.
-                type: string
-              templateParameterSchema:
-                description: |-
-                  TemplateParameterSchema defines the parameters required for ClusterTemplate.
-                  The parameter definitions should follow the OpenAPI V3 schema and
-                  explicitly define required fields.
-                type: object
-                x-kubernetes-preserve-unknown-fields: true
-              templates:
-                description: Templates defines the references to the templates required
-                  for ClusterTemplate.
+              templateDefaults:
+                description: TemplateDefaults defines the default values for templates
+                  required for ClusterTemplate.
                 properties:
                   clusterInstanceDefaults:
                     description: |-
@@ -158,6 +147,17 @@ spec:
                 - clusterInstanceDefaults
                 - policyTemplateDefaults
                 type: object
+              templateId:
+                description: TemplateId defines a Identifier for the O-Cloud Template.
+                  This identifier is allocated by the O-Cloud.
+                type: string
+              templateParameterSchema:
+                description: |-
+                  TemplateParameterSchema defines the parameters required for ClusterTemplate.
+                  The parameter definitions should follow the OpenAPI V3 schema and
+                  explicitly define required fields.
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
               version:
                 description: Version defines a version or generation of the resource
                   as defined by its provider.
@@ -165,8 +165,8 @@ spec:
             required:
             - name
             - release
+            - templateDefaults
             - templateParameterSchema
-            - templates
             - version
             type: object
           status:

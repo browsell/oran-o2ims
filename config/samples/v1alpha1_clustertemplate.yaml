@@ -12,18 +12,18 @@ spec:
     age: "31"
   metadata:
     apple: "23"
-  templates:
+  templateDefaults:
     hwMgmtDefaults:
       hardwareProvisioningTimeout: "90m"
       nodeGroupData:
         - name: controller
           role: master
-          hwProfile: profile-spr-single-processor-64G
+          hwProfile: hardwareprofile-sample
           resourceSelector:
             resourceselector.clcm.openshift.io/server-type: xr8620t
         - name: worker
           role: worker
-          hwProfile: profile-spr-dual-processor-128G
+          hwProfile: hardwareprofile-sample
           resourceSelector:
             resourceselector.clcm.openshift.io/server-type: xr12380c
     clusterInstanceDefaults: clustertemplate-sample.v1.0.0-clusterinstance-defaults
