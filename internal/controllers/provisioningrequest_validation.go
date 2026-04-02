@@ -11,12 +11,14 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"strings"
 	"time"
 
 	hwmgmtv1alpha1 "github.com/openshift-kni/oran-o2ims/api/hardwaremanagement/v1alpha1"
 	provisioningv1alpha1 "github.com/openshift-kni/oran-o2ims/api/provisioning/v1alpha1"
 	"github.com/openshift-kni/oran-o2ims/internal/constants"
 	ctlrutils "github.com/openshift-kni/oran-o2ims/internal/controllers/utils"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -187,10 +189,16 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 	// Start with defaults
 	mergedData := maps.Clone(hwMgmtDefaults)
 
-	// Extract hwMgmtParameters from ProvisioningRequest if present
-	hwMgmtParams, err := provisioningv1alpha1.ExtractMatchingInput(
+	// Extract hwMgmtParameters from ProvisioningRequest if present.
+	// ExtractMatchingInput returns an error both for unmarshal failures and missing keys.
+	// Missing key is expected (no overrides); unmarshal failure is a real input error.
+	hwMgmtParams, extractErr := provisioningv1alpha1.ExtractMatchingInput(
 		t.object.Spec.TemplateParameters.Raw, ctlrutils.TemplateParamHwMgmt)
-	if err == nil && hwMgmtParams != nil {
+	if extractErr != nil && strings.Contains(extractErr.Error(), "failed to unmarshal") {
+		return ctlrutils.NewInputError("failed to extract %s from templateParameters: %s",
+			ctlrutils.TemplateParamHwMgmt, extractErr.Error())
+	}
+	if hwMgmtParams != nil {
 		if !provisioningv1alpha1.SchemaDefinesHwMgmtParameters(clusterTemplate) {
 			return ctlrutils.NewInputError(
 				"templateParameters.%s is not defined in ClusterTemplate %q spec.templateParameterSchema",
@@ -247,6 +255,10 @@ func (t *provisioningRequestReconcilerTask) validateAndMergeHwMgmtInput(
 			return ctlrutils.NewInputError(
 				"hardwareProvisioningTimeout %q is not a valid duration: %s", timeoutStr, err.Error())
 		}
+		if timeout <= 0 {
+			return ctlrutils.NewInputError(
+				"hardwareProvisioningTimeout %q must be a positive duration", timeoutStr)
+		}
 		t.timeouts.hardwareProvisioning = timeout
 	}
 
@@ -283,7 +295,10 @@ func (t *provisioningRequestReconcilerTask) validateMergedHwProfiles(ctx context
 
 		hwProfileObj := &hwmgmtv1alpha1.HardwareProfile{}
 		if err := t.client.Get(ctx, client.ObjectKey{Name: hwProfile, Namespace: hwProfileNS}, hwProfileObj); err != nil {
-			return ctlrutils.NewInputError("HardwareProfile %q referenced by nodeGroup %q does not exist", hwProfile, name)
+			if k8serrors.IsNotFound(err) {
+				return ctlrutils.NewInputError("HardwareProfile %q referenced by nodeGroup %q does not exist", hwProfile, name)
+			}
+			return fmt.Errorf("failed to get HardwareProfile %q for nodeGroup %q: %w", hwProfile, name, err)
 		}
 	}
 

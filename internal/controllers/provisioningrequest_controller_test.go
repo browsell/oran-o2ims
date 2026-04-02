@@ -1064,11 +1064,11 @@ plan:
 				}
 				Expect(c.Status().Update(ctx, deletionCR)).To(Succeed())
 
-				// This will fail due to missing hwMgmtDefaults, which is expected behavior
+				// This will fail due to missing HardwarePlugin resource, which is expected behavior
 				// when the test setup doesn't include proper hardware plugin dependencies
 				_, err := deletionReconciler.handleProvisioningRequestDeletion(ctx, deletionCR)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("missing hwMgmtDefaults"))
+				Expect(err.Error()).To(ContainSubstring("failed to get HardwarePlugin client"))
 			})
 		})
 
@@ -4870,6 +4870,7 @@ plan:
 			BeforeEach(func() {
 				// Ensure hardware template is empty to skip hardware provisioning
 				deployConfigTemplate.Spec.Templates.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{}
+				deployConfigTask.ctDetails.templates.HwMgmtDefaults = provisioningv1alpha1.HwMgmtDefaults{}
 				Expect(c.Update(ctx, deployConfigTemplate)).To(Succeed())
 			})
 

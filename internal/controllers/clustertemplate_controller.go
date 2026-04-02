@@ -208,19 +208,31 @@ func (t *clusterTemplateReconcilerTask) validateClusterTemplateCR(ctx context.Co
 	// Validate the hwMgmtDefaults inline data if present
 	if len(t.object.Spec.Templates.HwMgmtDefaults.NodeGroupData) > 0 {
 		seenNodeGroups := map[string]struct{}{}
+		seenRoles := map[string]string{}
 		for _, ng := range t.object.Spec.Templates.HwMgmtDefaults.NodeGroupData {
 			if _, exists := seenNodeGroups[ng.Name]; exists {
 				validationErrs = append(validationErrs,
 					fmt.Sprintf("duplicate nodeGroupData name %q in hwMgmtDefaults", ng.Name))
 			}
 			seenNodeGroups[ng.Name] = struct{}{}
-		}
-		if t.object.Spec.Templates.HwMgmtDefaults.HardwareProvisioningTimeout != "" {
-			if _, err := time.ParseDuration(t.object.Spec.Templates.HwMgmtDefaults.HardwareProvisioningTimeout); err != nil {
+			if prev, exists := seenRoles[ng.Role]; exists {
 				validationErrs = append(validationErrs,
-					fmt.Sprintf("hardwareProvisioningTimeout %q is not a valid duration: %v",
-						t.object.Spec.Templates.HwMgmtDefaults.HardwareProvisioningTimeout, err))
+					fmt.Sprintf("duplicate role %q in hwMgmtDefaults for groups %q and %q", ng.Role, prev, ng.Name))
 			}
+			seenRoles[ng.Role] = ng.Name
+		}
+	}
+	// Validate hardwareProvisioningTimeout independently of nodeGroupData
+	if t.object.Spec.Templates.HwMgmtDefaults.HardwareProvisioningTimeout != "" {
+		d, err := time.ParseDuration(t.object.Spec.Templates.HwMgmtDefaults.HardwareProvisioningTimeout)
+		if err != nil {
+			validationErrs = append(validationErrs,
+				fmt.Sprintf("hardwareProvisioningTimeout %q is not a valid duration: %v",
+					t.object.Spec.Templates.HwMgmtDefaults.HardwareProvisioningTimeout, err))
+		} else if d <= 0 {
+			validationErrs = append(validationErrs,
+				fmt.Sprintf("hardwareProvisioningTimeout %q must be a positive duration",
+					t.object.Spec.Templates.HwMgmtDefaults.HardwareProvisioningTimeout))
 		}
 	}
 
@@ -532,7 +544,11 @@ func validateTemplateParameterSchema(object *provisioningv1alpha1.ClusterTemplat
 		return ctlrutils.NewInputError("Error validating the policyTemplateParameters schema: %s", err.Error())
 	}
 	clusterInstanceParamsSchema := subSchemas[ctlrutils.TemplateParamClusterInstance].(map[string]any)
-	if err := validateClusterInstanceParamsSchema(len(object.Spec.Templates.HwMgmtDefaults.NodeGroupData) > 0, clusterInstanceParamsSchema); err != nil {
+	// Hardware provisioning is active if the CT has hwMgmtDefaults.nodeGroupData OR
+	// if the templateParameterSchema exposes hwMgmtParameters (allowing the PR to supply it).
+	hasHwMgmt := len(object.Spec.Templates.HwMgmtDefaults.NodeGroupData) > 0 ||
+		provisioningv1alpha1.SchemaDefinesHwMgmtParameters(object)
+	if err := validateClusterInstanceParamsSchema(hasHwMgmt, clusterInstanceParamsSchema); err != nil {
 		return ctlrutils.NewInputError("Error validating the clusterInstanceParameters schema: %s", err.Error())
 	}
 	return nil

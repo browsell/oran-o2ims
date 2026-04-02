@@ -28,6 +28,7 @@ spec:
               type: object
               required:
                 - name
+                - role
               properties:
                 name:
                   type: string

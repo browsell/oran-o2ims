@@ -425,7 +425,8 @@ func SchemaDefinesHwMgmtParameters(clusterTemplate *ClusterTemplate) bool {
 func (r *ProvisioningRequest) ValidateHwMgmtHwProfiles(
 	ctx context.Context, c client.Client, clusterTemplate *ClusterTemplate) error {
 
-	if len(clusterTemplate.Spec.Templates.HwMgmtDefaults.NodeGroupData) == 0 {
+	if len(clusterTemplate.Spec.Templates.HwMgmtDefaults.NodeGroupData) == 0 &&
+		!SchemaDefinesHwMgmtParameters(clusterTemplate) {
 		return nil
 	}
 
